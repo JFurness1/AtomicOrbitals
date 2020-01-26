@@ -1,4 +1,3 @@
-
 import numpy as np
 from math import pi
 
@@ -168,6 +167,8 @@ class Atom:
         # Handle scalar r values as single element array
         if not np.isscalar(r):
             r = np.array((r))
+
+        assert np.min(r) > 0, "Error: distances must be non-zero and positive."
 
         if self.s_exp is not None:
             oS, doS, ddoS = self.get_orbitals(self.s_n, self.s_exp, self.s_coef, r)
