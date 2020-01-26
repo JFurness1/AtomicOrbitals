@@ -1,9 +1,27 @@
 # AtomicOrbitals
 
+<p xmlns:dct="http://purl.org/dc/terms/" xmlns:vcard="http://www.w3.org/2001/vcard-rdf/3.0#">
+  <a rel="license"
+     href="http://creativecommons.org/publicdomain/zero/1.0/">
+    <img src="https://licensebuttons.net/p/zero/1.0/80x15.png" style="border-style: none;" alt="CC0" />
+  </a>
+  <br />
+  To the extent possible under law,
+  <a rel="dct:publisher"
+     href="https://www.jfurness.uk/44-2/hartree-fock-slater-orbitals-for-spherical-atoms/">
+    <span property="dct:title">James Furness</span></a>
+  has waived all copyright and related or neighboring rights to
+  <span property="dct:title">Hartree-Fock Slater Orbitals for Spherical Atoms</span>.
+This work is published from:
+<span property="vcard:Country" datatype="dct:ISO3166"
+      content="US" about="https://www.jfurness.uk/44-2/hartree-fock-slater-orbitals-for-spherical-atoms/">
+  United States</span>.
+</p>
+
 A python module implementing accurate Hartree-Fock Slater orbitals for atoms under spherical symmetry.
 
 <!-- wp:paragraph -->
-<p>You are free to use it however you see fit <a href="http://&quot;http://creativecommons.org/publicdomain/zero/1.0/&quot;">under CC0 license</a> <img class="wp-image-394" style="width: 80px;" src="https://www.jfurness.uk/wp-content/uploads/2020/01/CC0-1.png" alt="CC0"></p>
+<p>You are free to use it however you see fit. 
 <!-- /wp:paragraph -->
 
 <!-- wp:paragraph -->
