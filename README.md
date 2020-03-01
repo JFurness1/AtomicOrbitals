@@ -47,7 +47,7 @@ neon = Densities.Atom("Ne")
 ```
 
 
-<p>Calling the initialised atom's <code>get_densities(r)</code> method with a distance from the nucleus (in atomic units) will return the spin resolved: electron density, density gradient, orbital kinetic energy, and density Laplacian, at the given distance from the nucleus. Due to the nature of the orbitals the nuclear distances must be positive and non-zero.</p>
+<p>Calling the initialised atom's <code>get_densities(r)</code> method with a distance from the nucleus (in atomic units) will return the spin resolved (0 or 1): electron density <code>d0, d1</code>, density gradient <code>g0, g1</code>, orbital kinetic energy <code>t0, t1</code>, and density Laplacian <code>l0, l1</code>, at the given distance from the nucleus. Due to the nature of the orbitals the nuclear distances must be positive and non-zero.</p>
 
 
 ```python
