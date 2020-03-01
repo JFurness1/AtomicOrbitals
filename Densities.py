@@ -128,17 +128,24 @@ class Atom:
     and returns the corresponding densities.
     """
 
+    # Static principle quantum number factors
+    FACTORS = np.array([2.0, 24.0, 720.0, 40320.0, 3628800.0])**(-0.5)
+
+
     def __init__(self, element):
         # Currently only deal with atomic symbols.
         # Eventually add dictionary to support full names and numbers?
         self.element = element
-
         try:
             u_atom = element.upper()
-            self.s_exp = AtomData.s_exp.get(u_atom, None)
-            self.s_coef = AtomData.s_coef.get(u_atom, None)
-            self.s_n = AtomData.s_n.get(u_atom, None)
-            self.s_occ = AtomData.s_occ.get(u_atom, [0, 0])
+            # We assume that every atom has S electrons
+            # So access with index notation to raise KeyError on missing atom.
+            self.s_exp = AtomData.s_exp[u_atom]
+            self.s_coef = AtomData.s_coef[u_atom]
+            self.s_n = AtomData.s_n[u_atom]
+            self.s_occ = AtomData.s_occ[u_atom]
+
+            # It is possible to be missing P and D electrons, so use get with defaults
             self.p_exp = AtomData.p_exp.get(u_atom, None)
             self.p_coef = AtomData.p_coef.get(u_atom, None)
             self.p_n = AtomData.p_n.get(u_atom, None)
@@ -148,7 +155,7 @@ class Atom:
             self.d_n = AtomData.d_n.get(u_atom, None)
             self.d_occ = AtomData.d_occ.get(u_atom, [0, 0])
         except KeyError:
-            raise KeyError('Error: Atom data for "{:}" incomplete'.format(element))
+            raise KeyError('Error: Atom data for "{:}" missing'.format(element))
 
     def get_densities(self, r):
         """
@@ -280,9 +287,13 @@ class Atom:
             e: exponent
             r: space coordinate. (distance from nucleus)
         """
-        FACTORS = np.array([2.0, 24.0, 720.0, 40320.0, 3628800.0])**(-0.5)
-        n_facs = FACTORS[n - 1]
-        c = n_facs*(2.0*e)**(n + 0.5)
+        n_facs = self.FACTORS[n - 1]
+        try:
+            c = n_facs*(2.0*e)**(n + 0.5)
+        except ValueError:
+            print("Exponents and principle number factors are different shapes.")
+            print("Did you typo a ',' for a decimal point? e.g. '1,23456' for '1.23456'")
+            raise ValueError("exponent or principle number error")
         rn = np.power.outer(r, (n - 1))
         es = np.einsum('j,ij->ji', c, rn)
         pw = np.exp(-np.outer(e, r))
@@ -347,6 +358,7 @@ class AtomData:
         'K'  : 0.59916415e3,
         'SC' : 0.75969760e3,  # Sc 4S1,3D2 (High spin)
         'CR' : 0.10433478e4,  # High spin Cr[Ar]4S1,3D5
+        'FE' : 0.12623440e4,  # 4S1,3D7
         'CU' : 0.16389601e4,  # Spherical High Spin Cu[Ar]4S1, 3D10
         'CU+': 0.16387196e4,  # Low Spin Cu+[Ar]3D10
         'AS' : 0.22342374e4,
@@ -376,6 +388,7 @@ class AtomData:
         'K'  : [10.0, 9.0],
         'SC' : [12.0, 9.0],
         'CR' : [15.0, 9.0],
+        'FE' : [15.0, 11.0],
         'CU' : [15.0, 14.0], 
         'CU+': [14.0, 14.0],
         'AS' : [18.0, 15.0],
@@ -408,6 +421,7 @@ class AtomData:
         'K'  : np.array([19.13500, 31.52500, 16.49860, 7.67410, 6.68508, 4.04102, 2.66919, 2.59794, 0.56203, 1.29017, 0.76641]),
         'SC' : np.array([33.43000, 20.88130, 18.18780, 8.42700, 7.45380, 4.78240, 3.24065, 2.65023, 1.47432, 1.06625, 0.79396]),
         'CR' : np.array([35.59110, 23.95440, 21.65020, 10.09060, 9.65415, 5.90457, 4.09494, 3.12628, 1.76632, 1.07837, 0.75455]),
+        'FE' : np.array([39.03330, 25.64990, 21.49470, 11.09700, 9.57638, 7.04409, 4.67338, 3.75688, 1.92542, 1.16347, 0.80510]),
         'CU' : np.array([28.48390, 42.50560, 23.54780, 13.26670, 11.52060, 8.09772, 6.70827, 5.07948, 3.19095, 1.53564, 0.87051]),
         'CU+': np.array([28.45300, 42.53270, 23.10340, 13.01550, 11.52770, 6.72990, 4.61704, 3.53495]),
         'AS' : np.array([31.34600, 38.60770, 26.26730, 14.94890, 13.45360, 8.13994, 5.53193, 3.14867, 2.01557, 1.42236]),
@@ -502,6 +516,12 @@ class AtomData:
             [-0.00127, -0.10429, -0.05407, 0.34969, 0.2394, -0.25716, -0.82284, -0.12469, 0.00348, -0.00196, 0.00086],
             [-0.00018, -0.02218, -0.01125, 0.07371, 0.05676, -0.05977, -0.21516, 0.01657, 0.40517, 0.57019, 0.12089]
             ]),
+        'FE' : np.array([
+            [0.02500, 0.95463, 0.02697, 0.00253, -0.00200, 0.00145, -0.00072, 0.00023, -0.00007, 0.00005, -0.00002],
+            [0.00300, -0.30930, -0.17650, 1.01804, 0.17531, -0.01169, 0.01056, -0.00252, 0.00081, -0.00046, 0.00024],
+            [0.00141, -0.11439, -0.07102, 0.40951, 0.30648, -0.33646, -0.79119, -0.17818, -0.00419, 0.00114, -0.00052],
+            [0.00006, -0.02200, -0.01479, 0.08261, 0.06130, -0.05983, -0.20737, 0.00950, 0.38130, 0.55408, 0.17020]
+            ]),
         'CU' : np.array([
             [-0.95789, -0.02856, -0.01759, -0.00457, 0.00440, -0.00584, 0.00407, -0.00063, 0.00015, -0.00003, 0.00001],
             [-0.31805, 0.00412, -0.19769, 0.93663, 0.29775, -0.04582, 0.04007, -0.00460, 0.00127, -0.00028, 0.00010],
@@ -562,6 +582,7 @@ class AtomData:
         'K'  : np.array([1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 4], dtype='int64'),
         'SC' : np.array([1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 4], dtype='int64'),
         'CR' : np.array([1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 4], dtype='int64'),
+        'FE' : np.array([1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 4], dtype='int64'),
         'CU' : np.array([1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 4], dtype='int64'),
         'CU+': np.array([1, 1, 2, 2, 3, 3, 3, 3], dtype='int64'),
         'AS' : np.array([1, 1, 2, 2, 3, 3, 3, 4, 4, 4], dtype='int64'),
@@ -592,6 +613,7 @@ class AtomData:
         'SC' : [np.array([1.0, 1.0, 1.0, 1.0]), np.array([1.0, 1.0, 1.0, 0.0])],
         'CR' : [np.array([1.0, 1.0, 1.0, 1.0]), np.array([1.0, 1.0, 1.0, 0.0])],
         'CU' : [np.array([1.0, 1.0, 1.0, 1.0]), np.array([1.0, 1.0, 1.0, 0.0])],
+        'FE' : [np.array([1.0, 1.0, 1.0, 1.0]), np.array([1.0, 1.0, 1.0, 0.0])],
         'CU+': [np.array([1.0, 1.0, 1.0]), np.array([1.0, 1.0, 1.0])],
         'AS' : [np.array([1.0, 1.0, 1.0, 1.0]), np.array([1.0, 1.0, 1.0, 1.0])],
         'KR' : [np.array([1.0, 1.0, 1.0, 1.0]), np.array([1.0, 1.0, 1.0, 1.0])],
@@ -619,6 +641,7 @@ class AtomData:
         'K'  : np.array([8.64187, 15.19360, 6.91359, 3.26163, 2.00984, 1.68876]),
         'SC' : np.array([16.63600, 9.58828, 7.84586, 4.19594, 2.91102, 2.03624]),
         'CR' : np.array([16.08310, 10.47530, 9.35810, 5.64044, 3.41092, 1.98103]),
+        'FE' : np.array([17.15460, 11.49160, 10.24270, 5.48104, 3.63388, 2.55735]),
         'CU' : np.array([11.88610, 19.58060, 10.83980, 7.30670, 4.57017, 2.89365]),
         'CU+': np.array([12.36430, 19.52640, 11.52780, 7.15679, 4.50992, 2.86886]),
         'AS' : np.array([14.05460, 22.78430, 13.52830, 8.37724, 5.57821, 4.34244, 2.42567, 1.45140, 0.91898]),
@@ -681,6 +704,10 @@ class AtomData:
             [0.11416, 0.6753, 0.24355, 0.01945, -0.00112, 0.00034],
             [-0.04558, -0.22347, -0.16991, 0.36285, 0.72269, 0.08413]
             ]),
+        'FE' : np.array([
+            [0.12045, 0.67287, 0.24344, 0.01464, -0.00247, 0.00067],
+            [-0.03800, -0.25619, -0.12309, 0.52113, 0.48986, 0.13139]
+            ]),
         'CU' : np.array([
             [0.84302, 0.11714, 0.04499, 0.03012, -0.00511, 0.00182],
             [-0.32074, -0.04070, -0.10529, 0.37164, 0.67096, 0.14959]
@@ -729,6 +756,7 @@ class AtomData:
         'K'  : np.array([2, 2, 3, 3, 3, 3], dtype='int64'),
         'SC' : np.array([2, 2, 3, 3, 3, 3], dtype='int64'),
         'CR' : np.array([2, 2, 3, 3, 3, 3], dtype='int64'),
+        'FE' : np.array([2, 2, 3, 3, 3, 3], dtype='int64'),
         'CU' : np.array([2, 2, 3, 3, 3, 3], dtype='int64'),
         'CU+': np.array([2, 2, 3, 3, 3, 3], dtype='int64'),
         'AS' : np.array([2, 2, 3, 3, 3, 4, 4, 4, 4], dtype='int64'),
@@ -754,6 +782,7 @@ class AtomData:
         'K'  : [np.array([3.0, 3.0]), np.array([3.0, 3.0])],
         'SC' : [np.array([3.0, 3.0]), np.array([3.0, 3.0])],
         'CR' : [np.array([3.0, 3.0]), np.array([3.0, 3.0])],
+        'FE' : [np.array([3.0, 3.0]), np.array([3.0, 3.0])],
         'CU' : [np.array([3.0, 3.0]), np.array([3.0, 3.0])],
         'CU+': [np.array([3.0, 3.0]), np.array([3.0, 3.0])],
         'AS' : [np.array([3.0, 3.0, 3.0]), np.array([3.0, 3.0, 0.0])],
@@ -769,6 +798,7 @@ class AtomData:
     d_exp = {
         'SC' : np.array([9.82074, 5.12071, 3.44801, 1.96214, 0.97339]),
         'CR' : np.array([9.76336, 5.47299, 3.45917, 2.18964, 1.26443]),
+        'FE' : np.array([11.54390, 6.18854, 4.02512, 2.62070, 1.41267]),
         'CU' : np.array([5.21851, 12.96880, 7.61139, 3.18734, 1.66248]),
         'CU+': np.array([4.70557, 13.47820, 7.38627, 2.93665, 1.69283]),
         'AS' : np.array([4.15670, 2.56420, 6.36170, 9.09175, 15.54610]),
@@ -781,6 +811,7 @@ class AtomData:
     d_coef = {
         'SC' : np.array([[0.01277, 0.08923, 0.23086, 0.44607, 0.43395]]),
         'CR' : np.array([[0.03088, 0.20871, 0.33792, 0.35411, 0.25996]]),
+        'FE' : np.array([[0.02601, 0.23679, 0.27992, 0.38759, 0.26599]]),
         'CU' : np.array([[0.29853, 0.02649, 0.18625, 0.42214, 0.26291]]),
         'CU+': np.array([[0.33575, 0.02401, 0.23802, 0.36175, 0.22921]]),
         'AS' : np.array([[0.44874, 0.11466, 0.30600, 0.22855, 0.02710]]),
@@ -799,6 +830,7 @@ class AtomData:
     d_n = {
         'SC' : np.array([3, 3, 3, 3, 3], dtype='int64'),
         'CR' : np.array([3, 3, 3, 3, 3], dtype='int64'),
+        'FE' : np.array([3, 3, 3, 3, 3], dtype='int64'),
         'CU' : np.array([3, 3, 3, 3, 3], dtype='int64'),
         'CU+': np.array([3, 3, 3, 3, 3], dtype='int64'),
         'AS' : np.array([3, 3, 3, 3, 3], dtype='int64'),
@@ -811,6 +843,7 @@ class AtomData:
     d_occ = {
         'SC' : [np.array([2.0]), np.array([0.0])],
         'CR' : [np.array([5.0]), np.array([0.0])],
+        'FE' : [np.array([5.0]), np.array([2.0])],
         'CU' : [np.array([5.0]), np.array([5.0])],
         'CU+': [np.array([5.0]), np.array([5.0])],
         'AS' : [np.array([5.0]), np.array([5.0])],
