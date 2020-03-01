@@ -47,7 +47,7 @@ neon = Densities.Atom("Ne")
 ```
 
 
-<p>Calling the initialised atom's ```python get_densities(r)``` method with a distance from the nucleus (in atomic units) will return the spin resolved: electron density, density gradient, orbital kinetic energy, and density Laplacian, at the given distance from the nucleus. Due to the nature of the orbitals the nuclear distances must be positive and non-zero.</p>
+<p>Calling the initialised atom's <code>get_densities(r)</code> method with a distance from the nucleus (in atomic units) will return the spin resolved: electron density, density gradient, orbital kinetic energy, and density Laplacian, at the given distance from the nucleus. Due to the nature of the orbitals the nuclear distances must be positive and non-zero.</p>
 
 
 ```python
@@ -61,7 +61,7 @@ d0, d1, g0, g1, t0, t1, l0, l1 = neon.get_densities(r)
 
 ```python
 r = np.linspace(0, 5, 500)
-d0, d1, g0, g1, t0, t1, l0, l1 = neon.get_densities(r)</pre>
+d0, d1, g0, g1, t0, t1, l0, l1 = neon.get_densities(r)
 ```
 
 
@@ -75,7 +75,7 @@ d0, d1, g0, g1, t0, t1, l0, l1 = neon.get_densities(r)
 # Then integrate to find the total number of electrons.
 # For neon this should be 10
 density = np.sum(4*h*np.pi*r**2*(d0 + d1))
-print("Total Density: {:.6f}".format(density))</pre>
+print("Total Density: {:.6f}".format(density))
 ```
 
 
@@ -126,7 +126,7 @@ plt.show()
 
 <p>At the time of writing the module contains orbitals for:</p>
 
-<pre>{H, He, Li, Be, B, C, N, O, F, Ne, Na, Mg, Si, P, Cl, Ar, K, Sc (4s1,3d2: High spin), Cr (4s1,3d5: High spin), Cu (4s1,3d10: High spin), Cu+ (3d10: Low spin), As, Kr, Ag, and Xe}</pre>
+<pre>{H, He, Li, Be, B, C, N, O, F, Ne, Na, Mg, Si, P, Cl, Ar, K, Sc (4s1,3d2: High spin), Cr (4s1,3d5: High spin), Fe, Cu (4s1,3d10: High spin), Cu+ (3d10: Low spin), As, Kr, Ag, and Xe}</pre>
 
 <p>The <a href="http://dx.doi.org/10.1016/S0092-640X(74)80016-1">Clementi and Roetti</a> paper contains orbital coefficients for all atoms with nuclear number ≤ 54 in many excited and ionic states. Unfortunately I haven't found a way to reliably automate reading the orbital coefficients from the paper, so they have all been entered by hand so far. The inefficiency of this process means I have only implemented atoms as they become useful to my work.</p>
 
