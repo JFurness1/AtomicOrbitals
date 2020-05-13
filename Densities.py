@@ -336,6 +336,18 @@ class Atom:
 
         return -self.nuclear_charge/r
 
+    def get_gaussian_nuclear_potential(self, r, gamma=0.2):
+        """
+        Returns a Gaussian approximation to the nuclear potential as defined
+        in 
+        F. Brockherde, L. Vogt, L. Li, M. E. Tuckerman, K. Burke, and K. R. Müller, Nat. Commun. 8, (2017).
+        DOI: 10.1038/s41467-017-00839-3
+
+        v(r) = Z*exp(-r/(2*gamma**2))
+        where Z is the nuclear charge and gamma is a width parameter chosen as 0.2 in the reference.
+        """
+
+        return -self.nuclear_charge*np.exp(-r**2/(2*gamma**2))
 
 class AtomData:
     """

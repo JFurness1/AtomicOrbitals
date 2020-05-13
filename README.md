@@ -84,6 +84,12 @@ print("Total Density: {:.6f}".format(density))
 v_nuc = neon.get_nuclear_potential(r)
 ```
 
+<p>A Gaussian approximation to the nuclear potential can be obtained to avoid the r = 0 singularity, as suggested in <a href="https://dx.doi.org/10.1038/s41467-017-00839-3">F. Brockherde, L. Vogt, L. Li, M. E. Tuckerman, K. Burke, and K. R. Müller, Nat. Commun. 8, (2017).</a></p>
+
+```python
+v_gau = neon.get_gaussian_nuclear_potential(r, gamma=0.2)
+```
+
 <p>This is a viable and simple way of accessing the densities, but such evenly spaced integration grids need more points for accurate integrals than more refined methods. This module implements a simple Gauss-Legendre integration grid that can give better accuracy with a smaller number of points than a simple grid:</p>
 
 ```python
