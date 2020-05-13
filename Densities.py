@@ -140,6 +140,10 @@ class Atom:
         self.element = element
         try:
             u_atom = element.upper()
+
+            # set nuclear charge
+            self.nuclear_charge = AtomData.nuclear_charge[u_atom]
+
             # We assume that every atom has S electrons
             # So access with index notation to raise KeyError on missing atom.
             self.s_exp = AtomData.s_exp[u_atom]
@@ -325,6 +329,13 @@ class Atom:
         pre -= np.divide.outer((n - 1), r**2)
         return pre*f
 
+    def get_nuclear_potential(self, r):
+        """
+        Returns the -Z/r potential energy curve for the atom for all points r
+        """
+
+        return -self.nuclear_charge/r
+
 
 class AtomData:
     """
@@ -399,6 +410,36 @@ class AtomData:
         'KR' : [18.0, 18.0],
         'AG' : [24.0, 23.0],
         'XE' : [27.0, 27.0]
+    }
+
+    nuclear_charge = {
+        'H'  : 1.0,
+        'HE' : 2.0,
+        'LI' : 3.0,
+        'BE' : 4.0,
+        'B'  : 5.0,
+        'C'  : 6.0,
+        'N'  : 7.0,
+        'O'  : 8.0,
+        'F'  : 9.0,
+        'NE' : 10.0,
+        'NA' : 11.0,
+        'MG' : 12.0,
+        'SI' : 14.0,
+        'P'  : 15.0,
+        'CL' : 17.0,
+        'AR' : 18.0,
+        'K'  : 19.0,
+        'SC' : 21.0,  # Sc 4S1,3D2 (High spin)
+        'CR' : 24.0,  # High spin Cr[Ar]4S1,3D5
+        'FE' : 26.0,  # 4S1,3D7
+        'CU' : 29.0,  # Spherical High Spin Cu[Ar]4S1, 3D10
+        'CU+': 29.0,  # Low Spin Cu+[Ar]3D10
+        'GE' : 32.0,
+        'AS' : 33.0,
+        'KR' : 36.0,
+        'AG' : 47.0,
+        'XE' : 54.0
     }
 
     ##################

@@ -78,6 +78,11 @@ density = np.sum(4*h*np.pi*r**2*(d0 + d1))
 print("Total Density: {:.6f}".format(density))
 ```
 
+<p>The nuclear potential is also available:</p>
+
+```python
+v_nuc = neon.get_nuclear_potential(r)
+```
 
 <p>This is a viable and simple way of accessing the densities, but such evenly spaced integration grids need more points for accurate integrals than more refined methods. This module implements a simple Gauss-Legendre integration grid that can give better accuracy with a smaller number of points than a simple grid:</p>
 
