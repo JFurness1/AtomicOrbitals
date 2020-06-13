@@ -1,5 +1,11 @@
 import numpy as np
 from math import pi
+try:
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import LinearSegmentedColormap
+    MAKE_MPL_COLOR_MAP = True
+except ImportError:
+    MAKE_MPL_COLOR_MAP = False
 
 """
 Code to generate atomic electron densities, analytical gradients and orbital kinetic energy 
@@ -14,6 +20,10 @@ as entries into these dictionaries. Default orbital parameters are taken from:
 
 The GridGenerator gives a simple implementation of an efficient Gauss-Legendre quadrature
 grid.
+
+A color dictionary following colors used by Jmol (roughly CPK) by element symbol. 
+Should be accessed using get_colors_for_elements() which returns a list of RGB for an input
+list of string element labels or Atom objects.
 
 Enrico Clementi, Carla Roetti,
 Roothaan-Hartree-Fock atomic wavefunctions: Basis functions and their coefficients for
@@ -118,6 +128,21 @@ def test_densities():
     else:
         print("Gradient: FAILED -")
 
+    print("\nELEMENT COLOR FUNCTIONS TEST")
+    print("===========================")
+    test_obj = [Atom("H"), Atom("C"), Atom("O")]
+    test_str = ["H", "C", "O"]
+    ref = np.array([[1., 1., 1.], [0.565, 0.565, 0.565], [1.   , 0.051, 0.051]])
+    
+    if np.allclose( np.array(get_colors_for_elements(test_obj)), ref):
+        print("\nColor from objects: PASSED")
+    else:
+        print("\nColor from objects: FAILED -")
+
+    if np.allclose( np.array(get_colors_for_elements(test_str)), ref):
+        print("Color from strings: PASSED")
+    else:
+        print("Color from strings: FAILED -")
 
 class Atom:
     """
@@ -348,6 +373,12 @@ class Atom:
         """
 
         return -self.nuclear_charge*np.exp(-r**2/(2*gamma**2))
+
+    def get_color(self):
+        """
+        Returns RGB color of element for plotting.
+        """
+        return COLOR_DICT[self.element]
 
 class AtomData:
     """
@@ -1218,6 +1249,131 @@ class GridGenerator:
 
         return npt, r, weight
 
+"""
+Defines the "color" of each element, same as those used by Jmol, roughly follows CPK coloring
+"""
+COLOR_DICT = {
+    'H':  np.array([1.000, 1.000, 1.000]),
+    'HE': np.array([0.851, 1.000, 1.000]),
+    'LI': np.array([0.800, 0.502, 1.000]),
+    'BE': np.array([0.761, 1.000, 0.000]),
+    'B':  np.array([1.000, 0.710, 0.710]),
+    'C':  np.array([0.565, 0.565, 0.565]),
+    'N':  np.array([0.188, 0.314, 0.973]),
+    'O':  np.array([1.000, 0.051, 0.051]),
+    'F':  np.array([0.565, 0.878, 0.314]),
+    'NE': np.array([0.702, 0.890, 0.961]),
+    'NA': np.array([0.671, 0.361, 0.949]),
+    'MG': np.array([0.541, 1.000, 0.000]),
+    'AL': np.array([0.749, 0.651, 0.651]),
+    'SI': np.array([0.941, 0.784, 0.627]),
+    'P':  np.array([1.000, 0.502, 0.000]),
+    'S':  np.array([1.000, 1.000, 0.188]),
+    'CL': np.array([0.122, 0.941, 0.122]),
+    'AR': np.array([0.502, 0.820, 0.890]),
+    'K':  np.array([0.561, 0.251, 0.831]),
+    'CA': np.array([0.239, 1.000, 0.000]),
+    'SC': np.array([0.902, 0.902, 0.902]),
+    'TI': np.array([0.749, 0.761, 0.780]),
+    'V':  np.array([0.651, 0.651, 0.671]),
+    'CR': np.array([0.541, 0.600, 0.780]),
+    'MN': np.array([0.612, 0.478, 0.780]),
+    'FE': np.array([0.878, 0.400, 0.200]),
+    'CO': np.array([0.941, 0.565, 0.627]),
+    'NI': np.array([0.314, 0.816, 0.314]),
+    'CU': np.array([0.784, 0.502, 0.200]),
+    'ZN': np.array([0.490, 0.502, 0.690]),
+    'GA': np.array([0.761, 0.561, 0.561]),
+    'GE': np.array([0.400, 0.561, 0.561]),
+    'AS': np.array([0.741, 0.502, 0.890]),
+    'SE': np.array([1.000, 0.631, 0.000]),
+    'BR': np.array([0.651, 0.161, 0.161]),
+    'KR': np.array([0.361, 0.722, 0.820]),
+    'RB': np.array([0.439, 0.180, 0.690]),
+    'SR': np.array([0.000, 1.000, 0.000]),
+    'Y':  np.array([0.580, 1.000, 1.000]),
+    'ZR': np.array([0.580, 0.878, 0.878]),
+    'NB': np.array([0.451, 0.761, 0.788]),
+    'MO': np.array([0.329, 0.710, 0.710]),
+    'TC': np.array([0.231, 0.620, 0.620]),
+    'RU': np.array([0.141, 0.561, 0.561]),
+    'RH': np.array([0.039, 0.490, 0.549]),
+    'PD': np.array([0.000, 0.412, 0.522]),
+    'AG': np.array([0.753, 0.753, 0.753]),
+    'CD': np.array([1.000, 0.851, 0.561]),
+    'IN': np.array([0.651, 0.459, 0.451]),
+    'SN': np.array([0.400, 0.502, 0.502]),
+    'SB': np.array([0.620, 0.388, 0.710]),
+    'TE': np.array([0.831, 0.478, 0.000]),
+    'I':  np.array([0.580, 0.000, 0.580]),
+    'XE': np.array([0.259, 0.620, 0.690]),
+    'CS': np.array([0.341, 0.090, 0.561]),
+    'BA': np.array([0.000, 0.788, 0.000]),
+    'LA': np.array([0.439, 0.831, 1.000]),
+    'CE': np.array([1.000, 1.000, 0.780]),
+    'PR': np.array([0.851, 1.000, 0.780]),
+    'ND': np.array([0.780, 1.000, 0.780]),
+    'PM': np.array([0.639, 1.000, 0.780]),
+    'SM': np.array([0.561, 1.000, 0.780]),
+    'EU': np.array([0.380, 1.000, 0.780]),
+    'GD': np.array([0.271, 1.000, 0.780]),
+    'TB': np.array([0.188, 1.000, 0.780]),
+    'DY': np.array([0.122, 1.000, 0.780]),
+    'HO': np.array([0.000, 1.000, 0.612]),
+    'ER': np.array([0.000, 0.902, 0.459]),
+    'TM': np.array([0.000, 0.831, 0.322]),
+    'YB': np.array([0.000, 0.749, 0.220]),
+    'LU': np.array([0.000, 0.671, 0.141]),
+    'HF': np.array([0.302, 0.761, 1.000]),
+    'TA': np.array([0.302, 0.651, 1.000]),
+    'W':  np.array([0.129, 0.580, 0.839]),
+    'RE': np.array([0.149, 0.490, 0.671]),
+    'OS': np.array([0.149, 0.400, 0.588]),
+    'IR': np.array([0.090, 0.329, 0.529]),
+    'PT': np.array([0.816, 0.816, 0.878]),
+    'AU': np.array([1.000, 0.820, 0.137]),
+    'HG': np.array([0.722, 0.722, 0.816]),
+    'TL': np.array([0.651, 0.329, 0.302]),
+    'PB': np.array([0.341, 0.349, 0.380]),
+    'BI': np.array([0.620, 0.310, 0.710]),
+    'PO': np.array([0.671, 0.361, 0.000]),
+    'AT': np.array([0.459, 0.310, 0.271]),
+    'RN': np.array([0.259, 0.510, 0.588]),
+    'FR': np.array([0.259, 0.000, 0.400]),
+    'RA': np.array([0.000, 0.490, 0.000]),
+    'AC': np.array([0.439, 0.671, 0.980]),
+    'TH': np.array([0.000, 0.729, 1.000]),
+    'PA': np.array([0.000, 0.631, 1.000]),
+    'U':  np.array([0.000, 0.561, 1.000]),
+    'NP': np.array([0.000, 0.502, 1.000]),
+    'PU': np.array([0.000, 0.420, 1.000]),
+    'AM': np.array([0.329, 0.361, 0.949]),
+    'CM': np.array([0.471, 0.361, 0.890]),
+    'BK': np.array([0.541, 0.310, 0.890]),
+    'CF': np.array([0.631, 0.212, 0.831]),
+    'ES': np.array([0.702, 0.122, 0.831]),
+    'FM': np.array([0.702, 0.122, 0.729]),
+    'MD': np.array([0.702, 0.051, 0.651]),
+    'NO': np.array([0.741, 0.051, 0.529]),
+    'LR': np.array([0.780, 0.000, 0.400]),
+    'RF': np.array([0.800, 0.000, 0.349]),
+    'DB': np.array([0.820, 0.000, 0.310]),
+    'SG': np.array([0.851, 0.000, 0.271]),
+    'BH': np.array([0.878, 0.000, 0.220]),
+    'HS': np.array([0.902, 0.000, 0.180]),
+    'MT': np.array([0.922, 0.000, 0.149]),
+}
 
+def get_colors_for_elements(elist):
+    """
+    Takes a list of element labels and returns the color.
+    elist can be list of strings or Atom objects
+    """
+    try:
+        return [COLOR_DICT[e.element.upper()] if isinstance(e, Atom) else COLOR_DICT[e.upper()] for e in elist]
+    except AttributeError:
+        raise ValueError("Input should be list of strings or Atom objects")
+
+    
 if __name__ == "__main__":
     test_densities()

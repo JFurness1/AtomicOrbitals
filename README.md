@@ -159,5 +159,7 @@ Densities.test_densities()
 python Densities.py
 ```
 
+<p>The module also implements methods to get the Jmol coloring (roughly CPK colors) of the elements. This can be accessed by calling an Atom object's <code>get_color()</code> method, or by passing a list of element label strings or Atom objects to the <code>get_colors_for_elements()</code> function.</p>
+
 <p>And that's it, happy calculating! If this tool has been useful to you I'd love to hear about it. I'm also happy to add the coefficients for any other atoms on request.</p>
 
