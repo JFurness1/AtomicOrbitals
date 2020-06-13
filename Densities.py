@@ -1369,6 +1369,8 @@ def get_colors_for_elements(elist):
     Takes a list of element labels and returns the color.
     elist can be list of strings or Atom objects
     """
+    if not isinstance(elist, list) or not isinstance(elist, tuple):
+        elist = [elist]
     try:
         return [COLOR_DICT[e.element.upper()] if isinstance(e, Atom) else COLOR_DICT[e.upper()] for e in elist]
     except AttributeError:
