@@ -396,6 +396,7 @@ class AtomData:
     # Integrating tau_0 + tau_1 should approximate this closely
     ke_test = {
         'H'  : 0.5,
+        'HE_IDEAL' : 0.284765625e1,
         'HE' : 0.28617128e1,
         'LI' : 0.74327544e1,
         'BE' : 0.14573036e2,
@@ -428,6 +429,7 @@ class AtomData:
     # Integrating den_0 and den_1 should approximate these closely
     N_test = {
         'H'  : [1.0, 0.0],
+        'HE_IDEAL' : [1.0, 1.0],
         'HE' : [1.0, 1.0],
         'LI' : [2.0, 1.0],
         'BE' : [2.0, 2.0],
@@ -460,6 +462,7 @@ class AtomData:
     nuclear_charge = {
         'H'  : 1.0,
         'HE' : 2.0,
+        'HE_IDEAL' : 2.0,
         'LI' : 3.0,
         'BE' : 4.0,
         'B'  : 5.0,
@@ -494,6 +497,7 @@ class AtomData:
     # S orbital exponents
     s_exp = {
         'H'  : np.array([1.0]),
+        'HE_IDEAL': np.array([27.0/16.0]),
         'HE' : np.array([1.41714, 2.37682, 4.39628, 6.52599, 7.94242]),
         'LI' : np.array([2.47673, 4.69873, 0.38350, 0.66055, 1.07000, 1.63200]),
         'BE' : np.array([3.47116, 6.36861, 0.77820, 0.94067, 1.48725, 2.71830]),
@@ -528,6 +532,7 @@ class AtomData:
     # Matrix of S orbital coefficients
     s_coef = {
         'H'  : np.array([[1.0]]),
+        'HE_IDEAL': np.array([[1.0]]),
         'HE' : np.array([
             [0.76838, 0.22346, 0.04082, -0.00994, 0.00230]
             ]),
@@ -675,6 +680,7 @@ class AtomData:
     # Principle quantum numbers of S functions. !Must be integer array for indexing!
     s_n = {
         'H' : np.array([1], dtype='int64'),
+        'HE_IDEAL' : np.array([1], dtype='int64'),
         'HE' : np.array([1, 1, 1, 1, 1], dtype='int64'),
         'LI' : np.array([1, 1, 2, 2, 2, 2], dtype='int64'),
         'BE' : np.array([1, 1, 2, 2, 2, 2], dtype='int64'),
@@ -707,6 +713,7 @@ class AtomData:
     # The S orbitals (ascending) that are occupied [spin 0 (up), spin 1 (down)]
     s_occ = {
         'H'  : [np.array([1.0]), np.array([0.0])],
+        'HE_IDEAL' : [np.array([1.0]), np.array([1.0])],
         'HE' : [np.array([1.0]), np.array([1.0])],
         'LI' : [np.array([1.0, 1.0]), np.array([1.0, 0.0])],
         'BE' : [np.array([1.0, 1.0]), np.array([1.0, 1.0])],
