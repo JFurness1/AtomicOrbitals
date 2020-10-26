@@ -9,43 +9,69 @@
   To the extent possible under law,
   <a rel="dct:publisher"
      href="https://www.jfurness.uk/44-2/hartree-fock-slater-orbitals-for-spherical-atoms/">
-    <span property="dct:title">James Furness</span></a>
-  has waived all copyright and related or neighboring rights to
-  <span property="dct:title">Hartree-Fock Slater Orbitals for Spherical Atoms</span>.
+    <span property="dct:title">James Furness and Susi Lehtola</span></a>
+  have waived all copyright and related or neighboring rights to
+  <span property="dct:title">Hartree-Fock Orbitals for Spherical Atoms</span>.
 This work is published from:
 <span property="vcard:Country" datatype="dct:ISO3166"
       content="US" about="https://www.jfurness.uk/44-2/hartree-fock-slater-orbitals-for-spherical-atoms/">
   United States</span>.
 </p>
 
-A python module implementing accurate Hartree-Fock Slater orbitals for atoms under spherical symmetry.
+<p>A python module implementing the evaluation of accurate
+Hartree-Fock orbitals for atoms under spherical symmetry. You are free
+to use it however you see fit. The code uses vectorised
+<code>numpy</code> functions to provide a fast evaluation of the
+electron density, electron density gradient, orbital kinetic energy
+density, and electron density Laplacian from published Slater-type
+orbital tabulations.</p>
 
+<p>Although the most famous such tabulation was published by Clementi
+and Roetti in their groundbreaking 1974 paper <a
+href="http://doi.org/10.1016/S0092-640X(74)80016-1">At. Data
+Nucl. Data Tables 14, 177 (1974)</a>, the Clementi-Roetti wave
+functions are poor especially for heavier atoms, resulting in errors
+that reach up to tens of millihartrees(!).</p>
 
-<p>You are free to use it however you see fit. 
+<p>Much more accurate tabulations have been reported by Koga and
+coworkers, which deviate only by microhartree from fully numerical
+values. The current version of this module employs analytical
+Hartree-Fock wave functions for H-Xe from <a
+href="http://doi.org/10.1002/(SICI)1097-461X(1999)71:6<491::AID-QUA6>3.0.CO;2-T">Koga
+et al, Int. J. Quantum Chem. 71, 491 (1999)</a> that deviate from the
+fully numerical values by just up to tens of microhartrees.</p>
 
+<p>Included in the distribution are also non-relativistic wave
+functions for heavy atoms from <a
+href="http://doi.org/10.1007/s002140000150">Koga et al,
+Theor. Chem. Acc. 104, 411 (2000)</a>, although their sensibility is
+debatable due to the neglect of relativistic effects.</p>
 
+<p>As described in the literature, the orbitals minimise the
+Hamiltonian for a spherically symmetric wave function with the right
+L^2 value. The user should be aware that these orbitals impose
+spherical symmetry on the system, including the <em>p</em> and
+<em>d</em> orbitals. This imposed symmetry is not a limitation, the
+orbitals are optimal for the spherical Hamiltonian, but it does mean
+that the energy from these orbitals for atoms with partially filled
+valence shells (e.g. carbon) will be different to the energy obtained
+by breaking the spatial symmetry.</p>
 
-<p>Much of my recent work has been in developing new <a href="https://en.wikipedia.org/wiki/Density_functional_theory#Approximations_(exchange%E2%80%93correlation_functionals)">semi-local density functional approximations</a> following a non-empirical philosophy of adherence to exact mathematical constraints. These constraints help form the body of the functional then we use simple systems, such as atoms, to set the remaining degrees of freedom. Having a computationally efficient set of high-accuracy orbitals has been a real asset for searching large parameter spaces.</p>
+<p>Why was this library developed? Much of my (James Furness) recent
+work has been in developing new <a
+href="https://en.wikipedia.org/wiki/Density_functional_theory#Approximations_(exchange%E2%80%93correlation_functionals)">semi-local
+density functional approximations</a> following a non-empirical
+philosophy of adherence to exact mathematical constraints. These
+constraints help form the body of the functional then we use simple
+systems, such as atoms, to set the remaining degrees of
+freedom. Having a computationally efficient set of high-accuracy
+orbitals has been a real asset for searching large parameter
+spaces.</p>
 
+<p>The module's main interface is the <code>Atom</code> class that is
+initialised with the desired atomic element symbol:</p>
 
-
-<p>This python module implements the evaluation routines for the sets of orbitals published by <a href="http://dx.doi.org/10.1016/S0092-640X(74)80016-1">Clementi and Roetti in their 1974 paper</a>. As described in the publication these are the Slater type orbitals that minimise the spherically symmetric <a href="https://en.wikipedia.org/wiki/Roothaan_equations">Roothaan-Hartree-Fock Hamiltonian</a>. The code uses vectorised <code>numpy</code> functions to provide a fast evaluation of the electron density, electron density gradient, orbital kinetic energy density, and electron density Laplacian from the published Slater orbitals.</p>
-
-
-
-<p>The user should be aware that these orbitals impose spherical symmetry on the system, including the <em>p</em> and <em>d</em> orbitals. This imposed symmetry is not a limitation, the orbitals are optimal for the spherical Hamiltonian, but it does mean that the energy from these orbitals for atoms with partially filled valence shells (e.g. carbon) will be different to the energy obtained by breaking the spatial symmetry.</p>
-
-
-
-<p>The module's main interface is the <code>Atom</code> class that is initialised with the desired atomic element symbol:</p>
-
-
-
-```python
-import Densities
-neon = Densities.Atom("Ne")
-```
-
+```python import Densities neon = Densities.Atom("Ne") ```
 
 <p>Calling the initialised atom's <code>get_densities(r)</code> method with a distance from the nucleus (in atomic units) will return the spin resolved (0 or 1): electron density <code>d0, d1</code>, density gradient <code>g0, g1</code>, orbital kinetic energy <code>t0, t1</code>, and density Laplacian <code>l0, l1</code>, at the given distance from the nucleus. Due to the nature of the orbitals the nuclear distances must be positive and non-zero.</p>
 
@@ -132,21 +158,7 @@ plt.show()
 <div class="wp-block-image"><figure class="aligncenter size-large is-resized"><img src="https://www.jfurness.uk/wp-content/uploads/2020/01/Argon_beta-1024x768.png" alt="" class="wp-image-377" width="512" height="384"/></figure></div>
 
 
-<h2>Defining More Atoms</h2>
-
-
-<p>At the time of writing the module contains orbitals for:</p>
-
-<pre>{H, He, Li, Be, B, C, N, O, F, Ne, Na, Mg, Si, P, Cl, Ar, K, Sc (4s1,3d2: High spin), Cr (4s1,3d5: High spin), Fe, Cu (4s1,3d10: High spin), Cu+ (3d10: Low spin), As, Kr, Ag, and Xe}</pre>
-
-<p>The <a href="http://dx.doi.org/10.1016/S0092-640X(74)80016-1">Clementi and Roetti</a> paper contains orbital coefficients for all atoms with nuclear number ≤ 54 in many excited and ionic states. Unfortunately I haven't found a way to reliably automate reading the orbital coefficients from the paper, so they have all been entered by hand so far. The inefficiency of this process means I have only implemented atoms as they become useful to my work.</p>
-
-
-<p>Such manual entry can be error prone, so the module contains an internal test routine to ensure correctness of evaluation functions, and to check that orbital coefficients produce the expected integrated quantities.</p>
-
-
-<p>If you would like to add new atoms this can be done by adding the relevant coefficients to the dictionaries in the <code>AtomData</code> class, see code comments and the paper for details. Alongside the coefficients the integrated kinetic energy (from the paper) should be added to <code>ke_test</code> and the integrated electron density should be added to <code>N_test</code>. The test routine will automatically check the orbitals integrate to these values when the test set is run:</p>
-
+<p>The test routine will automatically check if the orbitals integrate to the pretabulated values when the test set is run:</p>
 
 ```python
 import Densities
@@ -161,5 +173,5 @@ python Densities.py
 
 <p>The module also implements methods to get the Jmol coloring (roughly CPK colors) of the elements. This can be accessed by calling an Atom object's <code>get_color()</code> method, or by passing a list of element label strings or Atom objects to the <code>get_colors_for_elements()</code> function.</p>
 
-<p>And that's it, happy calculating! If this tool has been useful to you I'd love to hear about it. I'm also happy to add the coefficients for any other atoms on request.</p>
+<p>And that's it, happy calculating! If this tool has been useful to you I'd love to hear about it. </p>
 
