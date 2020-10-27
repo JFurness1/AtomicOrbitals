@@ -1,5 +1,8 @@
 import numpy as np
 from math import pi
+from literature_data.parser import parse
+import os
+
 try:
     import matplotlib.pyplot as plt
     from matplotlib.colors import LinearSegmentedColormap
@@ -7,11 +10,17 @@ try:
 except ImportError:
     MAKE_MPL_COLOR_MAP = False
 
+try:
+    import pylibxc
+    HAVE_LIBXC = True
+except ImportError:
+    HAVE_LIBXC = False
+
 """
-Code to generate atomic electron densities, analytical gradients and orbital kinetic energy 
+Code to generate atomic electron densities, analytical gradients and orbital kinetic energy
 densities from Slater orbitals.
 
-Core functionality comes from Atom() class which implements the get_densities(r) function 
+Core functionality comes from Atom() class which implements the get_densities(r) function
 to return quantities for numpy array of radial points r.
 
 Orbital data are stored in static AtomData class which implements dictionaries of parameters
@@ -21,7 +30,7 @@ as entries into these dictionaries. Default orbital parameters are taken from:
 The GridGenerator gives a simple implementation of an efficient Gauss-Legendre quadrature
 grid.
 
-A color dictionary following colors used by Jmol (roughly CPK) by element symbol. 
+A color dictionary following colors used by Jmol (roughly CPK) by element symbol.
 Should be accessed using get_colors_for_elements() which returns a list of RGB for an input
 list of string element labels or Atom objects.
 
@@ -55,47 +64,61 @@ def test_densities():
     entered by integrating the density and kinetic energy density. Good agreement
     indicates parameters have been entered correctly.
 
-    Whilst the threshold value on these integrations may seem a bit high, 
-    painstaking cross checking shows that even with correct values 
+    Whilst the threshold value on these integrations may seem a bit high,
+    painstaking cross checking shows that even with correct values
     and converged grids, this is as close as we get. Most small changes seem to break it
     so we can have confidence.
     """
 
     actual, r, wt = GridGenerator.make_grid(200)
     grid = 4*pi*r**2*wt
+
+    data = AtomData()
+
     print("\nINTEGRATED DENSITY TEST")
     print("=======================")
-    for a in list(AtomData.N_test.keys()):
+    for a in list(data.nuclear_charge.keys()):
         atom = Atom(a)
-        d_bm = AtomData.N_test[a]
+        Nel = data.electron_count[a]
         d0, d1, g0, g1, t0, t1, l0, l1 = atom.get_densities(r)
+
+        # Count electrons per spin channel
+        s_occ = AtomData.s_occ.get(a, [0, 0])
+        p_occ = AtomData.p_occ.get(a, [0, 0])
+        d_occ = AtomData.d_occ.get(a, [0, 0])
+        f_occ = AtomData.f_occ.get(a, [0, 0])
+        nela = np.sum(s_occ[0])+np.sum(p_occ[0])+np.sum(d_occ[0])+np.sum(f_occ[0])
+        nelb = np.sum(s_occ[1])+np.sum(p_occ[1])+np.sum(d_occ[1])+np.sum(f_occ[1])
+        assert(nela+nelb == Nel)
 
         id0 = np.dot(d0, grid)
         id1 = np.dot(d1, grid)
 
-        diff_0 = id0 - d_bm[0]
-        percent_diff_0 = 100*diff_0/d_bm[0]
+        diff_0 = id0 - nela
+        percent_diff_0 = 100*diff_0/nela
 
-        # Check to catch for Hydrogen having no spin 1 electrons
-        if d_bm[1] > 0.0:
-            diff_1 = id1 - d_bm[1]
-            percent_diff_1 = 100*diff_1/d_bm[1]
+        # Check to catch for Hydrogen having no beta electrons
+        if nelb > 0.0:
+            diff_1 = id1 - nelb
+            percent_diff_1 = 100*diff_1/nelb
         else:
             diff_1 = 0.0
             percent_diff_1 = 0.0
+
         print("{:>3} - N_0 = ({:.1f}) {:+2.6e}%, N_1 = ({:.1f}) {:+2.6e}%, {:}".format(a, id0, percent_diff_0, id1, percent_diff_1, "PASSED" if max(abs(diff_0), abs(diff_1)) < 1e-4 else "FAILED - "))
 
     print("\nINTEGRATED KINETIC TEST")
     print("=======================")
-    for a in list(AtomData.ke_test.keys()):
+    for a in list(data.ke_test.keys()):
         atom = Atom(a)
-        t_bm = AtomData.ke_test[a]
+        t_bm = data.ke_test[a]
         d0, d1, g0, g1, t0, t1, l0, l1 = atom.get_densities(r)
 
         it0 = np.dot(t0, grid)
         it1 = np.dot(t1, grid)
+        itot = it0 + it1
 
-        diff = it0 + it1 - t_bm
+        diff = itot - t_bm
         print("{:>3} - T = {:+.6e}%, {:}".format(a, 100*diff/t_bm, "PASSED" if abs(100*diff/t_bm) < 1e-2 else "FAILED - "))
 
 
@@ -133,7 +156,7 @@ def test_densities():
     test_obj = [Atom("H"), Atom("C"), Atom("O")]
     test_str = ["H", "C", "O"]
     ref = np.array([[1., 1., 1.], [0.565, 0.565, 0.565], [1.   , 0.051, 0.051]])
-    
+
     if np.allclose( np.array(get_colors_for_elements(test_obj)), ref):
         print("\nColor from objects: PASSED")
     else:
@@ -143,6 +166,18 @@ def test_densities():
         print("Color from strings: PASSED")
     else:
         print("Color from strings: FAILED -")
+
+    if HAVE_LIBXC:
+        test_functional='GGA_X_PBE'
+        print("\nATOMIC EXCHANGE ENERGIES WITH {}".format(test_functional))
+        print("============================================")
+        for a in list(data.ke_test.keys()):
+            atom = Atom(a)
+            nE, vrho, vsigma, vtau, vlapl = atom.libxc_eval(r, functional=test_functional, restricted=False)
+            Exc = (np.dot(nE, grid)).item()
+            print('{:3s} {:.10f}'.format(a, Exc))
+    else:
+        print("\nNot doing energy calculations due to lack of libxc.\n")
 
 class Atom:
     """
@@ -155,7 +190,7 @@ class Atom:
     and returns the corresponding densities.
     """
 
-    # Static principle quantum number factors
+    # Static principal quantum number factors
     FACTORS = np.array([2.0, 24.0, 720.0, 40320.0, 3628800.0])**(-0.5)
 
 
@@ -165,6 +200,7 @@ class Atom:
         self.element = element
         try:
             u_atom = element.upper()
+            d_atom = element.lower()
 
             # set nuclear charge
             self.nuclear_charge = AtomData.nuclear_charge[u_atom]
@@ -289,7 +325,7 @@ class Atom:
         """
         Evaluates Slater orbitals at position r.
         IN:
-            q_numbers = array of principle quantum numbers
+            q_numbers = array of principal quantum numbers
             exponents = array of exponents
             coefficients = linear combination coefficients for orbitals
             r = space coordinates
@@ -314,7 +350,7 @@ class Atom:
     def G(self, n, e, r):
         """
         Evaluates slater orbitals.
-            n: principle quantum number
+            n: principal quantum number
             e: exponent
             r: space coordinate. (distance from nucleus)
         """
@@ -322,9 +358,9 @@ class Atom:
         try:
             c = n_facs*(2.0*e)**(n + 0.5)
         except ValueError:
-            print("Exponents and principle number factors are different shapes.")
+            print("Exponents and principal number factors are different shapes.")
             print("Did you typo a ',' for a decimal point? e.g. '1,23456' for '1.23456'")
-            raise ValueError("exponent or principle number error")
+            raise ValueError("exponent or principal number error")
         rn = np.power.outer(r, (n - 1))
         es = np.einsum('j,ij->ji', c, rn)
         pw = np.exp(-np.outer(e, r))
@@ -333,7 +369,7 @@ class Atom:
     def DG(self, n, e, r, f):
         """
         Evaluates first derivative of slater orbitals.
-            n: principle quantum number
+            n: principal quantum number
             e: exponent
             r: space coordinate. (distance from nucleus)
             f: Undifferentiated function
@@ -345,7 +381,7 @@ class Atom:
     def DDG(self, n, e, r, f):
         """
         Evaluates second derivative of slater orbitals.
-            n: principle quantum number
+            n: principal quantum number
             e: exponent
             r: space coordinate. (distance from nucleus)
             f: Undifferentiated function
@@ -364,7 +400,7 @@ class Atom:
     def get_gaussian_nuclear_potential(self, r, gamma=0.2):
         """
         Returns a Gaussian approximation to the nuclear potential as defined
-        in 
+        in
         F. Brockherde, L. Vogt, L. Li, M. E. Tuckerman, K. Burke, and K. R. Müller, Nat. Commun. 8, (2017).
         DOI: 10.1038/s41467-017-00839-3
 
@@ -380,6 +416,80 @@ class Atom:
         """
         return COLOR_DICT[self.element]
 
+    def libxc_eval(self, r, functional='gga_x_pbe', restricted=False, threshold=None):
+        '''Evaluates a functional with the atomic density data using libxc'''
+
+        d0, d1, g0, g1, t0, t1, l0, l1 = self.get_densities(r)
+
+        if not HAVE_LIBXC:
+            raise ImportError('Cannot evaluate functional sinc pylibxc could not be imported.')
+
+        func = pylibxc.LibXCFunctional(functional, "unpolarized" if restricted else "polarized")
+
+        # Did we get a threshold?
+        if threshold is not None:
+            func.set_dens_threshold(threshold)
+
+        # Create input
+        inp = {}
+        if restricted:
+            inp["rho"] = d0+d1
+            inp["sigma"] = np.multiply(g0+g1,g0+g1)
+            inp["lapl"]= l0+l1
+            inp["tau"]= t0+t1
+        else:
+            rho_array = np.zeros((d0.size,2), dtype='float64')
+            sigma_array = np.zeros((d0.size,3), dtype='float64')
+            lapl_array = np.zeros((d0.size,2), dtype='float64')
+            tau_array = np.zeros((d0.size,2), dtype='float64')
+
+            rho_array[:,0]=d0
+            rho_array[:,1]=d1
+
+            sigma_array[:,0]=np.multiply(g0, g0)
+            sigma_array[:,1]=np.multiply(g0, g1)
+            sigma_array[:,2]=np.multiply(g1, g1)
+
+            lapl_array[:,0]=l0
+            lapl_array[:,1]=l1
+
+            tau_array[:,0]=t0
+            tau_array[:,1]=t1
+
+            inp["rho"] = rho_array
+            inp["sigma"] = sigma_array
+            inp["lapl"]= lapl_array
+            inp["tau"]= tau_array
+
+        # Compute functional
+        ret = func.compute(inp)
+
+        # Get energy density per particle
+        zk = ret.get("zk", np.zeros_like(d0))
+        # Energy density
+        nE = np.multiply(zk,d0+d1)
+
+        # First derivatives
+        vrho = ret["vrho"]
+        vsigma = ret.get("vsigma", np.zeros_like(inp["sigma"]))
+        vtau = ret.get("vtau", np.zeros_like(inp["tau"]))
+        vlapl = ret.get("vlapl", np.zeros_like(inp["lapl"]))
+        # Earlier versions of PyLibXC return the wrong shape, so reshape
+        # just to be sure
+        vrho = np.reshape(vrho, inp["rho"].shape)
+        vsigma = np.reshape(vsigma, inp["sigma"].shape)
+        vlapl = np.reshape(vlapl, inp["lapl"].shape)
+        vtau = np.reshape(vtau, inp["tau"].shape)
+
+        return nE, vrho, vsigma, vtau, vlapl
+
+
+def static_init(cls):
+    if getattr(cls, "static_init", None):
+        cls.static_init()
+    return cls
+
+@static_init
 class AtomData:
     """
     Class encapsulating raw data for all atoms.
@@ -392,77 +502,9 @@ class AtomData:
     """
 
     # Testing data
-
-    # Integrating tau_0 + tau_1 should approximate this closely
-    ke_test = {
-        'H'  : 0.5,
-        'HE_IDEAL' : 0.284765625e1,
-        'HE' : 0.28617128e1,
-        'LI' : 0.74327544e1,
-        'BE' : 0.14573036e2,
-        'B'  : 0.24528956e2,
-        'C'  : 0.37688357e2,
-        'N'  : 0.54400522e2,
-        'O'  : 0.74809346e2,
-        'F'  : 0.99409140e2,
-        'NE' : 0.12854681e3,
-        'NA' : 0.16185668e3,
-        'MG' : 0.19961025e3,
-        'SI' : 0.28885431e3,
-        'P'  : 0.34071381e3,
-        'S'  : 0.39744614e3, # Warning!, uses higher energy state as low is not converged
-        'CL' : 0.45946376e3,
-        'AR' : 0.52681380e3,
-        'K'  : 0.59916415e3,
-        'SC' : 0.75969760e3,  # Sc 4S1,3D2 (High spin)
-        'CR' : 0.10433478e4,  # High spin Cr[Ar]4S1,3D5
-        'FE' : 0.12623440e4,  # 4S1,3D7
-        'CU' : 0.16389601e4,  # Spherical High Spin Cu[Ar]4S1, 3D10
-        'CU+': 0.16387196e4,  # Low Spin Cu+[Ar]3D10
-        'GE' : 0.20753599e4,
-        'AS' : 0.22342374e4,
-        'KR' : 0.27520481e4,
-        'AG' : 0.51975130e4,      
-        'XE' : 0.72320470e4
-    }
-
-    # Integrating den_0 and den_1 should approximate these closely
-    N_test = {
-        'H'  : [1.0, 0.0],
-        'HE_IDEAL' : [1.0, 1.0],
-        'HE' : [1.0, 1.0],
-        'LI' : [2.0, 1.0],
-        'BE' : [2.0, 2.0],
-        'B'  : [3.0, 2.0],
-        'C'  : [4.0, 2.0],
-        'N'  : [5.0, 2.0],
-        'O'  : [5.0, 3.0],
-        'F'  : [5.0, 4.0],
-        'NE' : [5.0, 5.0],
-        'NA' : [6.0, 5.0],
-        'MG' : [6.0, 6.0],
-        'SI' : [8.0, 6.0],
-        'P'  : [9.0, 6.0],
-        'S'  : [9.0, 7.0],
-        'CL' : [9.0, 8.0],
-        'AR' : [9.0, 9.0],
-        'K'  : [10.0, 9.0],
-        'SC' : [12.0, 9.0],
-        'CR' : [15.0, 9.0],
-        'FE' : [15.0, 11.0],
-        'CU' : [15.0, 14.0], 
-        'CU+': [14.0, 14.0],
-        'GE' : [17.0, 15.0],
-        'AS' : [18.0, 15.0],
-        'KR' : [18.0, 18.0],
-        'AG' : [24.0, 23.0],
-        'XE' : [27.0, 27.0]
-    }
-
     nuclear_charge = {
         'H'  : 1.0,
         'HE' : 2.0,
-        'HE_IDEAL' : 2.0,
         'LI' : 3.0,
         'BE' : 4.0,
         'B'  : 5.0,
@@ -473,533 +515,137 @@ class AtomData:
         'NE' : 10.0,
         'NA' : 11.0,
         'MG' : 12.0,
+        'AL' : 13.0,
         'SI' : 14.0,
         'P'  : 15.0,
         'S'  : 16.0,
         'CL' : 17.0,
         'AR' : 18.0,
         'K'  : 19.0,
-        'SC' : 21.0,  # Sc 4S1,3D2 (High spin)
-        'CR' : 24.0,  # High spin Cr[Ar]4S1,3D5
-        'FE' : 26.0,  # 4S1,3D7
-        'CU' : 29.0,  # Spherical High Spin Cu[Ar]4S1, 3D10
-        'CU+': 29.0,  # Low Spin Cu+[Ar]3D10
+        'CA' : 20.0,
+        'SC' : 21.0,
+        'TI' : 22.0,
+        'V'  : 23.0,
+        'CR' : 24.0,
+        'MN' : 25.0,
+        'FE' : 26.0,
+        'CO' : 27.0,
+        'NI' : 28.0,
+        'CU' : 29.0,
+        'ZN' : 30.0,
+        'GA' : 31.0,
         'GE' : 32.0,
         'AS' : 33.0,
+        'SE' : 34.0,
+        'BR' : 35.0,
         'KR' : 36.0,
+        'RB' : 37.0,
+        'SR' : 38.0,
+        'Y'  : 39.0,
+        'ZR' : 40.0,
+        'NB' : 41.0,
+        'MO' : 42.0,
+        'TC' : 43.0,
+        'RU' : 44.0,
+        'RH' : 45.0,
+        'PD' : 46.0,
         'AG' : 47.0,
+        'CD' : 48.0,
+        'IN' : 49.0,
+        'SN' : 50.0,
+        'SB' : 51.0,
+        'TE' : 52.0,
+        'I'  : 53.0,
         'XE' : 54.0
     }
 
-    ##################
-    # S orbitals
+    electron_count = {}
+    ke_test = {}
 
-    # S orbital exponents
-    s_exp = {
-        'H'  : np.array([1.0]),
-        'HE_IDEAL': np.array([27.0/16.0]),
-        'HE' : np.array([1.41714, 2.37682, 4.39628, 6.52599, 7.94242]),
-        'LI' : np.array([2.47673, 4.69873, 0.38350, 0.66055, 1.07000, 1.63200]),
-        'BE' : np.array([3.47116, 6.36861, 0.77820, 0.94067, 1.48725, 2.71830]),
-        'B'  : np.array([4.44561, 7.91796, 0.86709, 1.21924, 2.07264, 3.44332]),
-        'C'  : np.array([5.43599, 9.48256, 1.05749, 1.52427, 2.68435, 4.20096]),
-        'N'  : np.array([6.45739, 11.17200, 1.36405, 1.89734, 3.25291, 5.08238]),
-        'O'  : np.array([7.61413, 13.75740, 1.69824, 2.48022, 4.31196, 5.86596]),
-        'F'  : np.array([8.55760, 14.97660, 1.82142, 2.67295, 4.90066, 6.57362]),
-        'NE' : np.array([9.48486, 15.56590, 1.96184, 2.86423, 4.82530, 7.79242]),
-        'NA' : np.array([11.01230, 12.66010, 8.36156, 5.73805, 3.61287, 2.25096, 1.11597, 0.71028]),
-        'MG' : np.array([12.01140, 13.91620, 9.48612, 6.72188, 4.24466, 2.53466, 1.46920, 0.89084]),
-        'SI' : np.array([14.01420, 16.39320, 10.87950, 7.72709, 5.16500, 2.97451, 2.14316, 1.31306]),
-        'P'  : np.array([15.01120, 17.31520, 11.77300, 8.66300, 5.90778, 3.69253, 2.47379, 1.51103]),
-        # The P coefficients for the lowest energy S state don't seem converged. Taking the next one
-        # 'S'  : np.array([16.01910, 19.45290, 13.77880, 9.85150, 6.48374, 4.05540, 2.67399, 1.66032]),
-        'S'  : np.array([16.01400, 18.96800, 13.07410, 9.75154, 6.46979, 3.77961, 2.86995, 1.71311]),
-        'CL' : np.array([17.00140, 19.26490, 13.45290, 10.04290, 6.93920, 4.43640, 2.90570, 1.81900]),
-        'AR' : np.array([18.01640, 22.04650, 16.08250, 11.63570, 7.70365, 4.87338, 3.32987, 2.02791]),
-        'K'  : np.array([19.13500, 31.52500, 16.49860, 7.67410, 6.68508, 4.04102, 2.66919, 2.59794, 0.56203, 1.29017, 0.76641]),
-        'SC' : np.array([33.43000, 20.88130, 18.18780, 8.42700, 7.45380, 4.78240, 3.24065, 2.65023, 1.47432, 1.06625, 0.79396]),
-        'CR' : np.array([35.59110, 23.95440, 21.65020, 10.09060, 9.65415, 5.90457, 4.09494, 3.12628, 1.76632, 1.07837, 0.75455]),
-        'FE' : np.array([39.03330, 25.64990, 21.49470, 11.09700, 9.57638, 7.04409, 4.67338, 3.75688, 1.92542, 1.16347, 0.80510]),
-        'CU' : np.array([28.48390, 42.50560, 23.54780, 13.26670, 11.52060, 8.09772, 6.70827, 5.07948, 3.19095, 1.53564, 0.87051]),
-        'CU+': np.array([28.45300, 42.53270, 23.10340, 13.01550, 11.52770, 6.72990, 4.61704, 3.53495]),
-        'GE' : np.array([30.02100, 36.80580, 27.00910, 13.79970, 12.88370, 7.89859, 5.27181, 2.87538, 1.79597, 1.29724]),
-        'AS' : np.array([31.34600, 38.60770, 26.26730, 14.94890, 13.45360, 8.13994, 5.53193, 3.14867, 2.01557, 1.42236]),
-        'KR' : np.array([32.83510, 40.94470, 27.45800, 16.06660, 14.29620, 9.10937, 6.37181, 3.84546, 2.57902, 1.77192]),
-        'AG' : np.array([48.27140, 34.04940, 21.93670, 21.32090, 14.14920, 10.13800, 5.87182, 3.98770, 2.66401, 1.65008, 1.04186]),
-        'XE' : np.array([55.30720, 37.80730, 27.92970, 23.69210, 15.03530, 12.67230, 7.60195, 5.73899, 4.17583, 2.99772, 1.98532])
-    }
+    s_exp = {}
+    s_coef = {}
+    s_n = {}
+    s_occ = {}
 
-    # Matrix of S orbital coefficients
-    s_coef = {
-        'H'  : np.array([[1.0]]),
-        'HE_IDEAL': np.array([[1.0]]),
-        'HE' : np.array([
-            [0.76838, 0.22346, 0.04082, -0.00994, 0.00230]
-            ]),
-        'LI' : np.array([
-            [0.89786, 0.11131, -0.00008, 0.00112, -0.00216, 0.00884],
-            [-0.14629, -0.01516, 0.00377, 0.98053, 0.10971, -0.11021]
-            ]),
-        'BE' : np.array([
-            [0.91796, 0.08724, 0.00108, -0.00199, 0.00176, 0.00628],
-            [-0.17092, -0.01455, 0.21186, 0.62499, 0.26662, -0.09919]
-            ]),
-        'B'  : np.array([
-            [0.92705, 0.07780, 0.00088, -0.00200, 0.00433, 0.00270],
-            [-0.19484, -0.01254, 0.06941, 0.75234, 0.31856, -0.12642]
-            ]),
-        'C'  : np.array([
-            [0.93262, 0.06931, 0.00083, -0.00176, 0.00559, 0.00382],
-            [-0.20814, -0.01071, 0.08099, 0.75045, 0.33549, -0.14765]
-            ]),
-        'N'  : np.array([
-            [0.93780, 0.05849, 0.00093, -0.00170, 0.00574, 0.00957],
-            [-0.21677, -0.00846, 0.17991, 0.67416, 0.31297, -0.14497]
-            ]),
-        'O'  : np.array([
-            [0.94516, 0.03391, -0.00034, 0.00241, -0.00486, 0.03681],
-            [-0.22157, -0.00476, 0.34844, 0.60807, 0.25365, -0.19183]
-            ]),
-        'F'  : np.array([
-            [0.94710, 0.03718, 0.00013, 0.00093, 0.00068, 0.02602],
-            [-0.22694, -0.00530, 0.23918, 0.68592, 0.31489, -0.21822]
-            ]),
-        'NE' : np.array([
-            [0.93717, 0.04899, 0.00058, -0.00064, 0.00551, 0.01999],
-            [-0.23093, -0.00635, 0.18620, 0.66899, 0.30910, -0.13871]
-            ]),
-        'NA' : np.array([
-            [0.96179, 0.04052, 0.01919, -0.00298, 0.00191, -0.00049, 0.00016, -0.00007],
-            [-0.23474, -0.00606, 0.11154, 0.43179, 0.51701, 0.04747, -0.00324, 0.00124],
-            [0.03527, 0.00121, -0.01889, -0.06808, -0.09232, 0.00076, 0.40764, 0.64467]
-            ]),
-        'MG' : np.array([
-            [0.96430, 0.03548, 0.02033, -0.00252, 0.00162,-0.00038, 0.00015, -0.00004],
-            [-0.24357, -0.00485, 0.08002, 0.39902, 0.57358, 0.05156,-0.00703, 0.00161],
-            [0.04691, 0.00144,-0.01850, -0.07964, -0.13478, -0.01906, 0.48239, 0.60221]
-            ]),
-        'SI' : np.array([
-            [0.96800, 0.03033, 0.02248, -0.00617, 0.00326, -0.00143, 0.00081, -0.00016],
-            [-0.25755, -0.00446, 0.11153, 0.40339, 0.55032, 0.03381, -0.00815, 0.00126],
-            [0.06595, 0.00185, -0.03461, -0.10378, -0.19229, -0.06561, 0.59732, 0.55390]
-            ]),
-        'P'  : np.array([
-            [0.96992, 0.02944, 0.01933, -0.00403, 0.00196, -0.00051, 0.00016, -0.00004],
-            [-0.26326, -0.00434, 0.10333, 0.34612, 0.58778, 0.06043, -0.00901, 0.00193],
-            [0.07230, 0.00186, -0.03447, -0.09503, -0.21241, -0.09001, 0.60361, 0.56185]
-            ]),
-        # 'S'  : np.array([
-        #     [0.97077, 0.02122, 0.02511, -0.00287, 0.00194, -0.00068, 0.00025, -0.00007],
-        #     [-0.26808, 0.00390, 0.04869, 0.36323, 0.62663, 0.05414, -0.00517, 0.00135],
-        #     [0.07778, 0.00244, -0.02131, -0.10107, -0.25158, -0.06277, 0.65107, 0.50175]
-        # ]),
-        'S'  : np.array([
-            [0.97114, 0.02429, 0.02358, -0.00533, 0.00249, -0.00109, 0.00060, -0.00010],
-            [-0.26821, -0.00289, 0.06531, 0.34835, 0.62960, 0.05768, -0.01492, 0.00199],
-            [0.07797, 0.00157, -0.02483, -0.10102, -0.24289, -0.16836, 0.67747, 0.57499]
-        ]),
-        'CL' : np.array([
-            [0.97335, 0.02682,0.01612,-0.00266, 0.00129,-0.00029, 0.00005,-0.00002],
-            [-0.27278, -0.00266, 0.09766, 0.34603, 0.59594, 0.04978, -0.00324, 0.00121],
-            [0.08249, 0.00237, -0.04193, -0.08968, -0.27243, -0.03736, 0.67062,0.47342]
-            ]),
-        'AR' : np.array([
-            [0.97349, 0.01684, 0.02422, -0.00114, 0.00123, -0.00039, 0.00010, -0.00003],
-            [0.27635, 0.00289, -0.03241, -0.33229, -0.65828, -0.06834, 0.00623, -0.00174],
-            [0.08634, 0.00186, -0.01540, -0.10236, -0.27614, -0.11879, 0.68436, 0.52050]
-            ]),
-        'K'  : np.array([
-            [-0.93619, -0.01385, -0.06342, -0.00014, -0.00139, 0.00189, -0.00212, 0.00118, -0.00005, -0.00015, 0.00011],
-            [0.27612, 0.00055, 0.14725, -0.95199, -0.19289, -0.00059, -0.00704, 0.00327, -0.00016, -0.00045, 0.00033],
-            [0.09267, -0.00066, 0.04980, -0.33547, -0.21345, 0.43855, 0.65200, 0.09749, 0.00560, 0.01932, -0.01161],
-            [-0.01825, 0.00031, -0.00899, 0.06350, 0.05015, -0.11346, -0.11474, -0.03065, 0.05190, 0.33431, 0.70417]
-            ]),
-        'SC' : np.array([
-            [-0.02013, -0.94537, -0.04302, -0.00472, 0.00331, -0.00239, 0.00177, -0.00078, 0.00041, -0.00034, 0.00012],
-            [-0.00114, -0.28660, -0.14705, 1.01171, 0.12731, 0.01004, -0.00016, 0.00040, -0.00003, 0.00004, 0.00001],
-            [-0.00011, -0.10055, -0.05537, 0.38472, 0.21487, -0.39743, -0.73852, -0.08548, -0.00356, 0.00277, -0.00046],
-            [-0.00013, -0.02178, -0.01254, 0.08561, 0.05105, -0.09233, -0.20685, 0.03083, 0.37107, 0.35736, 0.34952]
-            ]),
-        'CR' : np.array([
-            [-0.02722, -0.93357, -0.0472, -0.00604, 0.00363, -0.00151, 0.001, -0.00034, 0.00014, -0.00009, 0.00004],
-            [-0.00977, -0.27707, -0.15417, 0.93227, 0.19827, 0.02629, -0.00339, 0.00078, 0.00009, 0.00005, 0.00006],
-            [-0.00127, -0.10429, -0.05407, 0.34969, 0.2394, -0.25716, -0.82284, -0.12469, 0.00348, -0.00196, 0.00086],
-            [-0.00018, -0.02218, -0.01125, 0.07371, 0.05676, -0.05977, -0.21516, 0.01657, 0.40517, 0.57019, 0.12089]
-            ]),
-        'FE' : np.array([
-            [0.02500, 0.95463, 0.02697, 0.00253, -0.00200, 0.00145, -0.00072, 0.00023, -0.00007, 0.00005, -0.00002],
-            [0.00300, -0.30930, -0.17650, 1.01804, 0.17531, -0.01169, 0.01056, -0.00252, 0.00081, -0.00046, 0.00024],
-            [0.00141, -0.11439, -0.07102, 0.40951, 0.30648, -0.33646, -0.79119, -0.17818, -0.00419, 0.00114, -0.00052],
-            [0.00006, -0.02200, -0.01479, 0.08261, 0.06130, -0.05983, -0.20737, 0.00950, 0.38130, 0.55408, 0.17020]
-            ]),
-        'CU' : np.array([
-            [-0.95789, -0.02856, -0.01759, -0.00457, 0.00440, -0.00584, 0.00407, -0.00063, 0.00015, -0.00003, 0.00001],
-            [-0.31805, 0.00412, -0.19769, 0.93663, 0.29775, -0.04582, 0.04007, -0.00460, 0.00127, -0.00028, 0.00010],
-            [-0.11906, 0.00160, -0.08169, 0.38342, 0.28466, 0.04973, -0.83111, -0.44639, -0.03257, 0.00086, -0.00037],
-            [-0.02267, 0.00143, -0.00941, 0.05604, 0.08953, -0.11580, -0.03951, -0.15751, 0.17463, 0.66426, 0.34469]
-            ]),
-        'CU+': np.array([
-            [-0.95851, -0.02906, -0.01709, -0.00297, 0.00168, -0.00089, 0.00078, -0.00031],
-            [-0.32587, 0.00819, -0.19715, 0.98177, 0.23062, 0.01499, -0.00405, 0.00191],
-            [0.1216, -0.00297, 0.08245, -0.40335, -0.25689, 0.55723, 0.54604, 0.11723]
-            ]),
-        'GE' : np.array([
-            [0.75815, 0.23936, 0.00627, 0.00058, 0.00059, -0.00062, 0.00028, -0.00010, 0.00009, -0.00004],
-            [0.30153, 0.02606, 0.16087, -1.03666, -0.13209, -0.02214, 0.00323, -0.00097, 0.00081,-0.00036],
-            [0.11337, 0.01215, 0.07053, -0.43821, -0.24038, 0.49626, 0.72788, 0.01467, -0.00665, 0.00270],
-            [-0.03022, -0.00226, -0.01741, 0.11165, 0.07481, -0.16000, -0.21325, 0.46131, 0.53115, 0.13401]
-            ]),
-        'AS' : np.array([
-            [0.80944, 0.18590, 0.00949, -0.00069, 0.00121, -0.00083, 0.00039, -0.00014, 0.00012, -0.00005],
-            [0.35297, -0.01548, 0.18189, -0.98989, -0.22138, -0.01725, 0.00209, -0.00065, 0.00050, -0.00020],
-            [-0.13676, 0.00550, -0.08033, 0.42323, 0.27579, -0.49356, -0.72763, -0.01353, 0.00483, -0.00178],
-            [-0.03678, 0.00086, -0.02303, 0.11843, 0.08597, -0.16171, -0.24575, 0.45102, 0.54525, 0.13765]
-            ]),
-        'KR' : np.array([
-            [0.71521, 0.29911, -0.01854, 0.00897, -0.00464, 0.00190, -0.00088, 0.00026, -0.00018, 0.00006],
-            [0.38139, -0.01823, 0.17175, -1.07160, -0.14913, -0.01920, 0.00401, -0.00122, 0.00092, -0.00031],
-            [-0.14543, 0.00181, -0.09037, 0.49528, 0.25451, -0.48504, -0.75593, -0.01203, 0.00218, -0.00085],
-            [-0.04349, -0.00148, -0.03219, 0.16451, 0.08852, -0.16671, -0.33291, 0.46913, 0.55106, 0.13572]
-            ]),
-        'AG' : np.array([
-            [0.85321, 0.16287, -0.28452, 0.27326, -0.00757, 0.00328, -0.00088, 0.00058, -0.00024, 0.00013, -0.00005],
-            [0.01541, 0.48995, 1.81227, -2.97601, -0.05501, 0.01094, -0.00178, 0.00118, -0.00045, 0.00024, -0.00008],
-            [0.00405, 0.21698, 3.45888, -4.17359, 0.04946, 1.13958, 0.02993, -0.00847, 0.00277, -0.00132, 0.00044],
-            [-0.00037, -0.09248, -1.55034, 1.86019, 0.04019, -0.71940, 0.77034, 0.42464, 0.01133, -0.00164, 0.00074],
-            [-0.00019, 0.01987,  0.31024, -0.37499, -0.01483, 0.16544, -0.21760, -0.05567, 0.25280, 0.51023, 0.39485]
-            ]),
-        'XE' : np.array([
-            [0.87059, 0.14926, -0.06259, 0.04643, -0.01383, 0.01030, -0.00254, 0.00201, -0.00085, 0.00045, -0.00011],
-            [0.02107, 0.51209, -0.01873, -1.18386, -0.06502, 0.03432, -0.00469, 0.00352, -0.00136, 0.00069, -0.00017],
-            [-0.00868, -0.23044, -0.38195, 1.12481, 0.23955, -1.41092, -0.06111, 0.02591, -0.00759, 0.00353, -0.00076],
-            [0.00237, 0.10784, 0.19149, -0.54498, -0.35456, 1.13006, -0.63451, -0.58291, -0.02272, 0.00218, -0.00092],
-            [0.00070, 0.03815, 0.06768, -0.19267, -0.15274, 0.44776, -0.30543, -0.24664, 0.27675, 0.59862, 0.30408]
-            ])
-    }
+    p_exp = {}
+    p_coef = {}
+    p_n = {}
+    p_occ = {}
 
-    # Principle quantum numbers of S functions. !Must be integer array for indexing!
-    s_n = {
-        'H' : np.array([1], dtype='int64'),
-        'HE_IDEAL' : np.array([1], dtype='int64'),
-        'HE' : np.array([1, 1, 1, 1, 1], dtype='int64'),
-        'LI' : np.array([1, 1, 2, 2, 2, 2], dtype='int64'),
-        'BE' : np.array([1, 1, 2, 2, 2, 2], dtype='int64'),
-        'B'  : np.array([1, 1, 2, 2, 2, 2], dtype='int64'),
-        'C'  : np.array([1, 1, 2, 2, 2, 2], dtype='int64'),
-        'N'  : np.array([1, 1, 2, 2, 2, 2], dtype='int64'),
-        'O'  : np.array([1, 1, 2, 2, 2, 2], dtype='int64'),
-        'F'  : np.array([1, 1, 2, 2, 2, 2], dtype='int64'),
-        'NE' : np.array([1, 1, 2, 2, 2, 2], dtype='int64'),
-        'NA' : np.array([1, 3, 3, 3, 3, 3, 3, 3], dtype='int64'),
-        'MG' : np.array([1, 3, 3, 3, 3, 3, 3, 3], dtype='int64'),
-        'SI' : np.array([1, 3, 3, 3, 3, 3, 3, 3], dtype='int64'),
-        'P'  : np.array([1, 3, 3, 3, 3, 3, 3, 3], dtype='int64'),
-        'S'  : np.array([1, 3, 3, 3, 3, 3, 3, 3], dtype='int64'),
-        'CL' : np.array([1, 3, 3, 3, 3, 3, 3, 3], dtype='int64'),
-        'AR' : np.array([1, 3, 3, 3, 3, 3, 3, 3], dtype='int64'),
-        'K'  : np.array([1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 4], dtype='int64'),
-        'SC' : np.array([1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 4], dtype='int64'),
-        'CR' : np.array([1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 4], dtype='int64'),
-        'FE' : np.array([1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 4], dtype='int64'),
-        'CU' : np.array([1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 4], dtype='int64'),
-        'CU+': np.array([1, 1, 2, 2, 3, 3, 3, 3], dtype='int64'),
-        'GE' : np.array([1, 1, 2, 2, 3, 3, 3, 4, 4, 4], dtype='int64'),
-        'AS' : np.array([1, 1, 2, 2, 3, 3, 3, 4, 4, 4], dtype='int64'),
-        'KR' : np.array([1, 1, 2, 2, 3, 3, 3, 4, 4, 4], dtype='int64'),
-        'AG' : np.array([1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5], dtype='int64'),
-        'XE' : np.array([1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5], dtype='int64')
-    }
+    d_exp = {}
+    d_coef = {}
+    d_n = {}
+    d_occ = {}
 
-    # The S orbitals (ascending) that are occupied [spin 0 (up), spin 1 (down)]
-    s_occ = {
-        'H'  : [np.array([1.0]), np.array([0.0])],
-        'HE_IDEAL' : [np.array([1.0]), np.array([1.0])],
-        'HE' : [np.array([1.0]), np.array([1.0])],
-        'LI' : [np.array([1.0, 1.0]), np.array([1.0, 0.0])],
-        'BE' : [np.array([1.0, 1.0]), np.array([1.0, 1.0])],
-        'B'  : [np.array([1.0, 1.0]), np.array([1.0, 1.0])],
-        'C'  : [np.array([1.0, 1.0]), np.array([1.0, 1.0])],
-        'N'  : [np.array([1.0, 1.0]), np.array([1.0, 1.0])],
-        'O'  : [np.array([1.0, 1.0]), np.array([1.0, 1.0])],
-        'F'  : [np.array([1.0, 1.0]), np.array([1.0, 1.0])],
-        'NE' : [np.array([1.0, 1.0]), np.array([1.0, 1.0])],
-        'NA' : [np.array([1.0, 1.0, 1.0]), np.array([1.0, 1.0, 0.0])],
-        'MG' : [np.array([1.0, 1.0, 1.0]), np.array([1.0, 1.0, 1.0])], 
-        'SI' : [np.array([1.0, 1.0, 1.0]),np.array([1.0, 1.0, 1.0])],
-        'P'  : [np.array([1.0, 1.0, 1.0]), np.array([1.0, 1.0, 1.0])],
-        'S'  : [np.array([1.0, 1.0, 1.0]), np.array([1.0, 1.0, 1.0])],
-        'CL' : [np.array([1.0, 1.0, 1.0]),np.array([1.0, 1.0, 1.0])],
-        'AR' : [np.array([1.0, 1.0, 1.0]), np.array([1.0, 1.0, 1.0])],
-        'K'  : [np.array([1.0, 1.0, 1.0, 1.0]), np.array([1.0, 1.0, 1.0, 0.0])],
-        'SC' : [np.array([1.0, 1.0, 1.0, 1.0]), np.array([1.0, 1.0, 1.0, 0.0])],
-        'CR' : [np.array([1.0, 1.0, 1.0, 1.0]), np.array([1.0, 1.0, 1.0, 0.0])],
-        'CU' : [np.array([1.0, 1.0, 1.0, 1.0]), np.array([1.0, 1.0, 1.0, 0.0])],
-        'FE' : [np.array([1.0, 1.0, 1.0, 1.0]), np.array([1.0, 1.0, 1.0, 0.0])],
-        'CU+': [np.array([1.0, 1.0, 1.0]), np.array([1.0, 1.0, 1.0])],
-        'GE' : [np.array([1.0, 1.0, 1.0, 1.0]), np.array([1.0, 1.0, 1.0, 1.0])],
-        'AS' : [np.array([1.0, 1.0, 1.0, 1.0]), np.array([1.0, 1.0, 1.0, 1.0])],
-        'KR' : [np.array([1.0, 1.0, 1.0, 1.0]), np.array([1.0, 1.0, 1.0, 1.0])],
-        'AG' : [np.array([1.0, 1.0, 1.0, 1.0, 1.0]),np.array([1.0, 1.0, 1.0, 1.0, 0.0])],
-        'XE' : [np.array([1.0, 1.0, 1.0, 1.0, 1.0]), np.array([1.0, 1.0, 1.0, 1.0, 1.0])]
-    }
+    f_exp = {}
+    f_coef = {}
+    f_n = {}
+    f_occ = {}
 
-    ##################
-    # P orbitals
+    @classmethod
+    def add_entry(self, a, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc):
+        '''Adds an entry to the database'''
 
-    # P orbital exponents
-    p_exp = {
-        'B'  : np.array([0.87481, 1.36992, 2.32262, 5.59481]),
-        'C'  : np.array([0.98073, 1.44361, 2.60051, 6.51003]),
-        'N'  : np.array([1.16068, 1.70472, 3.03935, 7.17482]),
-        'O'  : np.array([1.14394, 1.81730, 3.44988, 7.56484]),
-        'F'  : np.array([1.26570, 2.05803, 3.92853, 8.20412]),
-        'NE' : np.array([1.45208, 2.38168, 4.48489, 9.13464]),
-        'MG' : np.array([5.92580, 7.98979, 5.32964, 3.71678, 2.59986]),
-        'NA' : np.array([5.54977, 8.66846, 5.43460, 3.55503, 2.31671]),
-        'SI' : np.array([7.14360, 16.25720, 10.79720, 6.89724, 4.66598, 2.32046, 1.33470, 0.79318]),
-        'P'  : np.array([7.60940, 13.97590, 11.89390, 7.55531, 5.17707, 2.62934, 1.50494, 0.77783]),
-        # 'S'  : np.array([8.00375, 7.67346, 12.09980, 7.67727, 5.32630, 2.87350, 1.67242, 1.03092]),
-        'S'  : np.array([8.06921, 12.84920, 11.58840, 7.95447, 5.50966, 2.87841, 1.60671, 0.86354]),
-        'CL' : np.array([8.50000, 15.01240, 12.32570, 8.37240, 6.10920, 3.19310, 1.78630, 0.92930]),
-        'AR' : np.array([9.05477, 15.54410, 12.39970, 8.56120, 5.94658, 3.42459, 1.96709, 1.06717]),
-        'K'  : np.array([8.64187, 15.19360, 6.91359, 3.26163, 2.00984, 1.68876]),
-        'SC' : np.array([16.63600, 9.58828, 7.84586, 4.19594, 2.91102, 2.03624]),
-        'CR' : np.array([16.08310, 10.47530, 9.35810, 5.64044, 3.41092, 1.98103]),
-        'FE' : np.array([17.15460, 11.49160, 10.24270, 5.48104, 3.63388, 2.55735]),
-        'CU' : np.array([11.88610, 19.58060, 10.83980, 7.30670, 4.57017, 2.89365]),
-        'CU+': np.array([12.36430, 19.52640, 11.52780, 7.15679, 4.50992, 2.86886]),
-        'GE' : np.array([13.35370, 22.09880, 12.89370, 8.12507, 5.26670, 3.74374, 2.16483, 1.27537, 0.88029]),
-        'AS' : np.array([14.05460, 22.78430, 13.52830, 8.37724, 5.57821, 4.34244, 2.42567, 1.45140, 0.91898]),
-        'KR' : np.array([17.03660, 26.04380, 15.51000, 9.49403, 6.57275, 5.38507, 3.15603, 2.02966, 1.42733]),
-        'AG' : np.array([30.61540, 19.99580, 11.00880, 8.86584, 5.90958, 3.92436, 2.55069]),
-        'XE' : np.array([34.88440, 23.30470, 12.54120, 12.02300, 7.72390, 5.40562, 3.32661, 2.09341, 1.36686])
-    }
+        self.ke_test[a] = Ekin
+        for ishell in range(len(ams)):
+            if ams[ishell] == 0:
+                self.s_exp[a] = xs[ishell]
+                self.s_coef[a] = np.transpose(cs[ishell])
+                self.s_n[a] = ns[ishell]
+                self.s_occ[a] = socc
+            elif ams[ishell] == 1:
+                self.p_exp[a] = xs[ishell]
+                self.p_coef[a] = np.transpose(cs[ishell])
+                self.p_n[a] = ns[ishell]
+                self.p_occ[a] = pocc
+            elif ams[ishell] == 2:
+                self.d_exp[a] = xs[ishell]
+                self.d_coef[a] = np.transpose(cs[ishell])
+                self.d_n[a] = ns[ishell]
+                self.d_occ[a] = docc
+            elif ams[ishell] == 3:
+                self.f_exp[a] = xs[ishell]
+                self.f_coef[a] = np.transpose(cs[ishell])
+                self.f_n[a] = ns[ishell]
+                self.f_occ[a] = focc
+            else:
+                raise ValueError('Angular momentum too large')
 
-    # Matrix of P orbital coefficients
-    p_coef = {
-        'B'  : np.array([
-            [0.53622, 0.40340, 0.11653, 0.00821]
-            ]),
-        'C'  : np.array([
-            [0.28241, 0.54697, 0.23195, 0.01025]
-            ]),
-        'N'  : np.array([
-            [0.26639, 0.52319, 0.27353, 0.01292]
-            ]),
-        'O'  : np.array([
-            [0.16922, 0.57974, 0.32352, 0.01660]
-            ]),
-        'F'  : np.array([
-            [0.17830, 0.56185, 0.33658, 0.01903]
-            ]),
-        'NE' : np.array([
-            [0.21799, 0.53338, 0.32933, 0.01872]
-            ]),
-        'NA' : np.array([
-            [0.46417, 0.03622, 0.29282, 0.31635, 0.07543]
-            ]),
-        'MG' : np.array([
-            [0.52391, 0.07012, 0.31965, 0.20860, 0.03888]
-            ]),
-        'SI' : np.array([
-            [0.54290, 0.00234, 0.04228, 0.32155, 0.22474, 0.00732, -0.00105, 0.00041],
-            [-0.11535, -0.00189, -0.00473, -0.07552, 0.01041, 0.46075, 0.57665, 0.06274]
-            ]),
-        'P'  : np.array([
-            [0.57352, 0.00664, 0.02478, 0.30460, 0.21442, 0.00552, -0.00045, 0.00011],
-            [-0.13569, -0.00813, 0.00586, -0.08424, 0.02002, 0.51314, 0.55176, 0.02781]
-            ]),
-        #  Notice that the second array of coefficients has element 2 undefined, and element 4 is rediculous
-        #  The paper does not give any adivice on this...
-        # 'S'  : np.array([
-        #     [0.61294, -0.75360, 0.03668, 1.07415, 0.14538, 0.00199, 0.00094, -0.00014],
-        #     [-0.15586, 0.00000, -0.01199, 18.39285, 0.09041, 0.52697, 0.49465, 0.05112]
-        #     ]),
-        'S'  : np.array([
-            [0.60189, 0.03330, -0.00380, 0.30971, 0.17511, 0.00376, 0.00097, -0.00001],
-            [-0.15258, -0.02915, 0.03506, -0.10730, 0.05645, 0.55255, 0.50726, 0.02856]
-            ]),
-        'CL' : np.array([
-            [0.63254, 0.00287, 0.03393, 0.27156, 0.16389, 0.00707, -0.00034, 0.00036],
-            [-0.16954, -0.00982, 0.01280, -0.10925, 0.07066, 0.56909, 0.49144, 0.02336]
-            ]),
-        'AR' : np.array([
-            [0.64116, 0.00865, 0.04186, 0.31735, 0.09642, 0.00003, 0.00055, -0.00013],
-            [-0.17850, -0.00812, 0.00520, -0.10986, 0.10994, 0.56149, 0.46314, 0.02951]
-            ]),
-        'K'  : np.array([
-            [0.66743, 0.04207, 0.34752, 0.01398, -0.00944, 0.00526],
-            [-0.20797, -0.01176, -0.12744, 0.56718, 0.45273, 0.09340]
-            ]),
-        'SC' : np.array([
-            [0.04468, 0.68927, 0.31591, 0.01334, -0.00350, 0.00090],
-            [-0.01420, -0.23164, -0.14293, 0.39187, 0.51763, 0.22030]
-            ]),
-        'CR' : np.array([
-            [0.11416, 0.6753, 0.24355, 0.01945, -0.00112, 0.00034],
-            [-0.04558, -0.22347, -0.16991, 0.36285, 0.72269, 0.08413]
-            ]),
-        'FE' : np.array([
-            [0.12045, 0.67287, 0.24344, 0.01464, -0.00247, 0.00067],
-            [-0.03800, -0.25619, -0.12309, 0.52113, 0.48986, 0.13139]
-            ]),
-        'CU' : np.array([
-            [0.84302, 0.11714, 0.04499, 0.03012, -0.00511, 0.00182],
-            [-0.32074, -0.04070, -0.10529, 0.37164, 0.67096, 0.14959]
-            ]),
-        'CU+': np.array([
-            [0.76853, 0.11626, 0.12971, 0.02772, -0.00468, 0.00165],
-            [-0.28521, -0.04270, -0.12476, 0.37278, 0.66459, 0.13742]
-            ]),
-        'GE' : np.array([
-            [0.86134, 0.10385, 0.02927, 0.04517, -0.01327, 0.00507, -0.00240, 0.00147, -0.00063],
-            [0.34590, 0.03597, 0.07589, -0.33604, -0.74958, -0.08490, 0.00762, -0.00478, 0.00190],
-            [0.06904, 0.00684, 0.01618, -0.07467, -0.16721, 0.03395, 0.48432, 0.53214, 0.07195]
-            ]),
-        'AS' : np.array([
-            [0.83284, 0.10192, 0.06278, 0.04654, -0.01655, 0.00612, -0.00205, 0.00109, -0.00039],
-            [0.33887, 0.03589, 0.08838, -0.33676, -0.73040, -0.09452, -0.00136, -0.00010, 0.00004],
-            [0.07735, 0.00736, 0.01932, -0.08004, -0.19430, 0.02331, 0.50866, 0.53655, 0.05044]
-            ]),
-        'KR' : np.array([
-            [0.72322, 0.06774, 0.22056, 0.04478, -0.01672, 0.00609, -0.00195, 0.00111, -0.00040],
-            [0.30185, 0.02508, 0.15903, -0.28475, -0.76440, -0.10670, -0.00562, 0.00137, -0.00053],
-            [0.08488, 0.00571, 0.04169, -0.07425, -0.26866, 0.01341, 0.51241, 0.42557, 0.18141]
-            ]),
-        'AG' : np.array([
-            [-0.13383, -0.86745, -0.03675, 0.02046, -0.00291, 0.00130, -0.00032],
-            [0.03049, 0.47268, -0.65496, -0.46200, -0.02649, 0.00687, -0.00213],
-            [0.00947, 0.19286, -0.26069, -0.32251, 0.59654, 0.53658, 0.07101]
-            ]),
-        'XE' : np.array([
-            [0.13527, 0.86575, 0.11362, -0.09833, 0.00123, -0.00028, -0.00003, 0.00004, -0.00002],
-            [0.02765, 0.49883, -0.48416, -0.61656, -0.05986, 0.01605, -0.00407, 0.00238, -0.00087],
-            [-0.00908, -0.22945, -0.34216, 1.02476, -0.53369, -0.67016, -0.02313, 0.00433, -0.00136],
-            [-0.00277, -0.07054, -0.18148, 0.40692, -0.22741, -0.21144, 0.49354, 0.53529, 0.13666]
-            ])
-    }
+    @classmethod
+    def static_init(self):
+        '''Initialize the data storage by reading in the tabulated wave functions'''
 
-    # Principle quantum numbers of P orbitals. Must be integer array.
-    p_n = {
-        'B'  : np.array([2, 2, 2, 2], dtype='int64'),
-        'C'  : np.array([2, 2, 2, 2], dtype='int64'),
-        'N'  : np.array([2, 2, 2, 2], dtype='int64'),
-        'O'  : np.array([2, 2, 2, 2], dtype='int64'),
-        'F'  : np.array([2, 2, 2, 2], dtype='int64'),
-        'NE' : np.array([2, 2, 2, 2], dtype='int64'),
-        'NA' : np.array([2, 4, 4, 4, 4], dtype='int64'),
-        'MG' : np.array([2, 4, 4, 4, 4], dtype='int64'),
-        'SI' : np.array([2, 4, 4, 4, 4, 4, 4, 4], dtype='int64'),
-        'P'  : np.array([2, 4, 4, 4, 4, 4, 4, 4], dtype='int64'),
-        'S'  : np.array([2, 4, 4, 4, 4, 4, 4, 4], dtype='int64'),
-        'CL' : np.array([2, 4, 4, 4, 4, 4, 4, 4], dtype='int64'),
-        'AR' : np.array([2, 4, 4, 4, 4, 4, 4, 4], dtype='int64'),
-        'K'  : np.array([2, 2, 3, 3, 3, 3], dtype='int64'),
-        'SC' : np.array([2, 2, 3, 3, 3, 3], dtype='int64'),
-        'CR' : np.array([2, 2, 3, 3, 3, 3], dtype='int64'),
-        'FE' : np.array([2, 2, 3, 3, 3, 3], dtype='int64'),
-        'CU' : np.array([2, 2, 3, 3, 3, 3], dtype='int64'),
-        'CU+': np.array([2, 2, 3, 3, 3, 3], dtype='int64'),
-        'GE' : np.array([2, 2, 3, 3, 3, 4, 4, 4, 4], dtype='int64'),
-        'AS' : np.array([2, 2, 3, 3, 3, 4, 4, 4, 4], dtype='int64'),
-        'KR' : np.array([2, 2, 3, 3, 3, 4, 4, 4, 4], dtype='int64'),
-        'AG' : np.array([2, 2, 3, 3, 4, 4, 4], dtype='int64'),
-        'XE' : np.array([2, 2, 3, 3, 4, 4, 5, 5, 5], dtype='int64')
-    }
+        # Add neutral atoms
+        for a in self.nuclear_charge.keys():
+            self.electron_count[a]=self.nuclear_charge[a]
+            Etot, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc = parse("literature_data/k99l/neutral/{}".format(a.lower()))
+            self.add_entry(a, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc)
 
-    # P orbitals that are occupied [spin 0 (up), spin 1 (down)]
-    p_occ = {
-        'B'  : [np.array([1.0]), np.array([0.0])],
-        'C'  : [np.array([2.0]), np.array([0.0])],
-        'N'  : [np.array([3.0]), np.array([0.0])],
-        'O'  : [np.array([3.0]), np.array([1.0])],
-        'F'  : [np.array([3.0]), np.array([2.0])],
-        'NE' : [np.array([3.0]), np.array([3.0])],
-        'NA' : [np.array([3.0]), np.array([3.0])],
-        'MG' : [np.array([3.0]), np.array([3.0])],
-        'SI' : [np.array([3.0, 2.0]), np.array([3.0, 0.0])],
-        'P'  : [np.array([3.0, 3.0]), np.array([3.0, 0.0])],
-        'S'  : [np.array([3.0, 3.0]), np.array([3.0, 1.0])],
-        'CL' : [np.array([3.0, 3.0]), np.array([3.0, 2.0])],
-        'AR' : [np.array([3.0, 3.0]), np.array([3.0, 3.0])],
-        'K'  : [np.array([3.0, 3.0]), np.array([3.0, 3.0])],
-        'SC' : [np.array([3.0, 3.0]), np.array([3.0, 3.0])],
-        'CR' : [np.array([3.0, 3.0]), np.array([3.0, 3.0])],
-        'FE' : [np.array([3.0, 3.0]), np.array([3.0, 3.0])],
-        'CU' : [np.array([3.0, 3.0]), np.array([3.0, 3.0])],
-        'CU+': [np.array([3.0, 3.0]), np.array([3.0, 3.0])],
-        'GE' : [np.array([3.0, 3.0, 2.0]), np.array([3.0, 3.0, 0.0])],
-        'AS' : [np.array([3.0, 3.0, 3.0]), np.array([3.0, 3.0, 0.0])],
-        'KR' : [np.array([3.0, 3.0, 3.0]), np.array([3.0, 3.0, 3.0])],
-        'AG' : [np.array([3.0, 3.0, 3.0]), np.array([3.0, 3.0, 3.0])],
-        'XE' : [np.array([3.0, 3.0, 3.0, 3.0]), np.array([3.0, 3.0, 3.0, 3.0])]
-    }
+            if False and a == 'LI':
+                print('Etot {}'.format(Etot))
+                print('Ekin {}'.format(Ekin))
+                print('ams {}'.format(ams))
+                print('ns {}'.format(ns))
+                print('xs {}'.format(xs))
+                print('cs {}'.format(cs))
+                print('socc {}'.format(socc))
 
-    ##################
-    # D orbitals
+        # Add cations and anions
+        neutral_atoms = self.nuclear_charge.copy()
+        for a in neutral_atoms.keys():
+            if os.path.isfile('literature_data/k99l/cation/{}.cat'.format(a.lower())):
+                cata="{}+".format(a)
+                self.nuclear_charge[cata]=neutral_atoms[a]
+                self.electron_count[cata]=neutral_atoms[a]-1
+                Etot, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc = parse("literature_data/k99l/cation/{}.cat".format(a.lower()))
+                self.add_entry(cata, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc)
 
-    # D orbital exponents
-    d_exp = {
-        'SC' : np.array([9.82074, 5.12071, 3.44801, 1.96214, 0.97339]),
-        'CR' : np.array([9.76336, 5.47299, 3.45917, 2.18964, 1.26443]),
-        'FE' : np.array([11.54390, 6.18854, 4.02512, 2.62070, 1.41267]),
-        'CU' : np.array([5.21851, 12.96880, 7.61139, 3.18734, 1.66248]),
-        'CU+': np.array([4.70557, 13.47820, 7.38627, 2.93665, 1.69283]),
-        'GE' : np.array([3.82993, 2.34719, 6.11651, 8.86174, 14.92730]),
-        'AS' : np.array([4.15670, 2.56420, 6.36170, 9.09175, 15.54610]),
-        'KR' : np.array([5.30650, 3.36240, 7.94963, 10.35430, 17.11420]),
-        'AG' : np.array([16.46200, 9.36028, 5.93684, 3.53384, 1.88607]),
-        'XE' : np.array([20.08240, 11.78600, 7.30842, 4.88400, 3.19850])
-    }
-
-    # Matrix of D orbital coefficients
-    d_coef = {
-        'SC' : np.array([[0.01277, 0.08923, 0.23086, 0.44607, 0.43395]]),
-        'CR' : np.array([[0.03088, 0.20871, 0.33792, 0.35411, 0.25996]]),
-        'FE' : np.array([[0.02601, 0.23679, 0.27992, 0.38759, 0.26599]]),
-        'CU' : np.array([[0.29853, 0.02649, 0.18625, 0.42214, 0.26291]]),
-        'CU+': np.array([[0.33575, 0.02401, 0.23802, 0.36175, 0.22921]]),
-        'GE' : np.array([[0.44017, 0.12938, 0.33840, 0.20172, 0.02653]]),
-        'AS' : np.array([[0.44874, 0.11466, 0.30600, 0.22855, 0.02710]]),
-        'KR' : np.array([[0.50854, 0.11070, 0.24778, 0.20584, 0.02863]]),
-        'AG' : np.array([
-            [0.23488, 0.78019, 0.05511, -0.00618, 0.00117],
-            [-0.07446, -0.25709, 0.29070, 0.60532, 0.30158]
-            ]),
-        'XE' : np.array([
-            [-0.19493, -0.80743, -0.06830, 0.02129, -0.00536],
-            [-0.08265, -0.34860, 0.40928, 0.59391, 0.14481]
-            ])
-    }
-
-    # Principle quantum numbers of D orbitals. Must be integer array.
-    d_n = {
-        'SC' : np.array([3, 3, 3, 3, 3], dtype='int64'),
-        'CR' : np.array([3, 3, 3, 3, 3], dtype='int64'),
-        'FE' : np.array([3, 3, 3, 3, 3], dtype='int64'),
-        'CU' : np.array([3, 3, 3, 3, 3], dtype='int64'),
-        'CU+': np.array([3, 3, 3, 3, 3], dtype='int64'),
-        'GE' : np.array([3, 3, 3, 3, 3], dtype='int64'),
-        'AS' : np.array([3, 3, 3, 3, 3], dtype='int64'),
-        'KR' : np.array([3, 3, 3, 3, 3], dtype='int64'),
-        'AG' : np.array([3, 3, 4, 4, 4], dtype='int64'),
-        'XE' : np.array([3, 3, 4, 4, 4], dtype='int64')
-    }
-
-    # number of the D orbitals that are occupied [spin 0 (up), spin 1 (down)]
-    d_occ = {
-        'SC' : [np.array([2.0]), np.array([0.0])],
-        'CR' : [np.array([5.0]), np.array([0.0])],
-        'FE' : [np.array([5.0]), np.array([2.0])],
-        'CU' : [np.array([5.0]), np.array([5.0])],
-        'CU+': [np.array([5.0]), np.array([5.0])],
-        'GE' : [np.array([5.0]), np.array([5.0])],
-        'AS' : [np.array([5.0]), np.array([5.0])],
-        'KR' : [np.array([5.0]), np.array([5.0])],
-        'AG' : [np.array([5.0, 5.0]), np.array([5.0, 5.0])],
-        'XE' : [np.array([5.0, 5.0]), np.array([5.0, 5.0])]
-    }
-
+            if os.path.isfile('literature_data/k99l/anion/{}.an'.format(a.lower())):
+                ana="{}-".format(a)
+                self.nuclear_charge[ana]=neutral_atoms[a]
+                self.electron_count[ana]=neutral_atoms[a]+1
+                Etot, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc = parse("literature_data/k99l/anion/{}.an".format(a.lower()))
+                self.add_entry(ana, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc)
 
 class GridGenerator:
     """
@@ -1114,17 +760,17 @@ class GridGenerator:
         """
         if npt <= 0:
             raise ValueError("Can't generate grid for <= 0 points")
-            return 
+            return
         if npt == 1:
             xpt = np.array([0.0])
             wht = np.array([2.0])
             return xpt, wht
 
-        # Each mesh is stored as a section of a big array. 
+        # Each mesh is stored as a section of a big array.
         # These store its number and start index is here
         mesh_npts = [2,3,4,5,6,7,8,9,10,11,12,13,14,16,20,24,28,32,40,48,64,96]
 
-        # First, look to see if the mesh is stored. 
+        # First, look to see if the mesh is stored.
         # If not we take the largest number that is lower than that stored.
         for i in range(len(mesh_npts)):
             mesh_idx = i
@@ -1415,6 +1061,6 @@ def get_colors_for_elements(elist):
     except AttributeError:
         raise ValueError("Input should be list of strings or Atom objects")
 
-    
+
 if __name__ == "__main__":
     test_densities()
