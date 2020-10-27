@@ -168,6 +168,9 @@ def parse(filename):
             elif am == 3:
                 assert(coeffs.shape[1] == len(f_occ[0]))
                 assert(coeffs.shape[1] == len(f_occ[1]))
+            else:
+                raise ValueError('am={} too high'.format(am))
+
         return Etot, Ekin, ams, ns, xs, cs, s_occ, p_occ, d_occ, f_occ
 
 if __name__ == "__main__":
