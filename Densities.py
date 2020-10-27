@@ -167,6 +167,18 @@ def test_densities():
     else:
         print("Color from strings: FAILED -")
 
+    if HAVE_LIBXC:
+        test_functional='GGA_X_PBE'
+        print("\nATOMIC EXCHANGE ENERGIES WITH {}".format(test_functional))
+        print("============================================")
+        for a in list(data.ke_test.keys()):
+            atom = Atom(a)
+            nE, vrho, vsigma, vtau, vlapl = atom.libxc_eval(r, functional=test_functional, restricted=False)
+            Exc = (np.dot(nE, grid)).item()
+            print('{:3s} {:.10f}'.format(a, Exc))
+    else:
+        print("\nNot doing energy calculations due to lack of libxc.\n")
+
 class Atom:
     """
     Object initialised to contain the relevant data
