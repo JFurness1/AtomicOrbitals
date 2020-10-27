@@ -52,7 +52,7 @@ def read_block(data, iline):
 
 def parse_occupation(line):
     '''Parses the occupation data'''
-    occdata = line.split()[1].replace(",","").replace("("," ").replace(")"," ").split()
+    occdata = line.split()[1].replace(",","").replace("("," ").replace(")"," ").replace("["," ").replace("]"," ").split()
     s_occ = [[], []]
     p_occ = [[], []]
     d_occ = [[], []]
@@ -65,17 +65,45 @@ def parse_occupation(line):
         downocc = nel-upocc
         return upocc, downocc
 
-    for ishell in range(0,len(occdata),2):
-        if occdata[ishell] == 'K':
+    ishell=0
+    while ishell < len(occdata):
+        if occdata[ishell] == 'XE':
+            # 5s
+            s_occ[0].extend(['1', '1', '1', '1', '1'])
+            s_occ[1].extend(['1', '1', '1', '1', '1'])
+            # 4p
+            p_occ[0].extend(['3', '3', '3', '3'])
+            p_occ[1].extend(['3', '3', '3', '3'])
+            # 2d
+            d_occ[0].extend(['5', '5'])
+            d_occ[1].extend(['5', '5'])
+            ishell += 1
+        elif occdata[ishell] == 'RN':
+            # 6s
+            s_occ[0].extend(['1', '1', '1', '1', '1', '1'])
+            s_occ[1].extend(['1', '1', '1', '1', '1', '1'])
+            # 5p
+            p_occ[0].extend(['3', '3', '3', '3', '3'])
+            p_occ[1].extend(['3', '3', '3', '3', '3'])
+            # 3d
+            d_occ[0].extend(['5', '5', '5'])
+            d_occ[1].extend(['5', '5', '5'])
+            # 1f
+            f_occ[0].append('7')
+            f_occ[1].append('7')
+            ishell += 1
+        elif occdata[ishell] == 'K':
             assert(occdata[ishell+1] == '2')
             s_occ[0].append('1')
             s_occ[1].append('1')
+            ishell += 2
         elif occdata[ishell] == 'L':
             assert(occdata[ishell+1] == '8')
             s_occ[0].append('1')
             s_occ[1].append('1')
             p_occ[0].append('3')
             p_occ[1].append('3')
+            ishell += 2
         elif occdata[ishell] == 'M':
             assert(occdata[ishell+1] == '18')
             s_occ[0].append('1')
@@ -84,26 +112,31 @@ def parse_occupation(line):
             p_occ[1].append('3')
             d_occ[0].append('5')
             d_occ[1].append('5')
+            ishell += 2
         elif occdata[ishell][1] == 'S':
             upocc,downocc = hunds_rule(occdata[ishell+1], 0)
             if upocc+downocc > 0:
                 s_occ[0].append(upocc)
                 s_occ[1].append(downocc)
+            ishell += 2
         elif occdata[ishell][1] == 'P':
             upocc,downocc = hunds_rule(occdata[ishell+1], 1)
             if upocc+downocc > 0:
                 p_occ[0].append(upocc)
                 p_occ[1].append(downocc)
+            ishell += 2
         elif occdata[ishell][1] == 'D':
             upocc,downocc = hunds_rule(occdata[ishell+1], 2)
             if upocc+downocc > 0:
                 d_occ[0].append(upocc)
                 d_occ[1].append(downocc)
+            ishell += 2
         elif occdata[ishell][1] == 'F':
             upocc,downocc = hunds_rule(occdata[ishell+1], 3)
             if upocc+downocc > 0:
                 f_occ[0].append(upocc)
                 f_occ[1].append(downocc)
+            ishell += 2
         else:
             raise ValueError('Error parsing occupation line {}'.format(occdata))
 
@@ -127,17 +160,27 @@ def parse(filename):
         # Read occupation data
         s_occ, p_occ, d_occ, f_occ = parse_occupation(data[0])
 
+        def read_energy(line):
+            '''Reads the total or kinetic energy from the input line'''
+            items = data[iline].split()
+
+            # Need to take care in case there's no space between the equals sign and the value
+            if len(items[1])>1:
+                return float(items[1][1:])
+            else:
+                return float(items[2])
+
         # Total energy
         while len(data[iline].strip())==0 or data[iline].split()[0] != "E":
             iline = iline + 1
         assert(data[iline].split()[0] == 'E')
-        Etot = float(data[iline].split()[2])
+        Etot = read_energy(data[iline])
 
         # Kinetic energy
         while len(data[iline].strip())==0 or data[iline].split()[0] != "T":
             iline = iline + 1
             assert(data[iline].split()[0] == 'T')
-        Ekin = float(data[iline].split()[2])
+        Ekin = read_energy(data[iline])
 
         # Skip forward to basis function data
         while data[iline].strip() != "ORBITAL ENERGIES AND EXPANSION COEFFICIENTS":
@@ -172,6 +215,3 @@ def parse(filename):
                 raise ValueError('am={} too high'.format(am))
 
         return Etot, Ekin, ams, ns, xs, cs, s_occ, p_occ, d_occ, f_occ
-
-if __name__ == "__main__":
-    parse("neutral/xe")

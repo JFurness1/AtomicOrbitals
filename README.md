@@ -47,10 +47,15 @@ et al, Int. J. Quantum Chem. 71, 491 (1999)</a> that deviate from the
 fully numerical values by just up to tens of microhartrees.</p>
 
 <p>Included in the distribution are also non-relativistic wave
-functions for heavy atoms from <a
+functions for heavy atoms Cs-Lr from <a
 href="http://doi.org/10.1007/s002140000150">Koga et al,
-Theor. Chem. Acc. 104, 411 (2000)</a>, although their sensibility is
-debatable due to the neglect of relativistic effects.</p>
+Theor. Chem. Acc. 104, 411 (2000)</a>, although the wave functions are
+much less accurate than those for the lighter atoms (average error of
+0.19 mEh in the total energy compared to fully numerical
+calculations), and although the sensibility of non-relativistic wave
+functions is debatable due to the complete neglect of relativistic
+effects which have a profound importance for the orbitals and electron
+densities in the 6th and 7th periods.</p>
 
 <p>As described in the literature, the atomic Hartree-Fock orbitals
 minimise the Hamiltonian for a spherically symmetric wave function

@@ -105,7 +105,7 @@ def test_densities():
             diff_1 = 0.0
             percent_diff_1 = 0.0
 
-        print("{:>3} - N_0 = ({:.1f}) {:+2.6e}%, N_1 = ({:.1f}) {:+2.6e}%, {:}".format(a, id0, percent_diff_0, id1, percent_diff_1, "PASSED" if max(abs(diff_0), abs(diff_1)) < 1e-4 else "FAILED - "))
+        print("{:>3} - N_0 = ({:4.1f}) {:+2.6e}%, N_1 = ({:4.1f}) {:+2.6e}%, {:}".format(a, id0, percent_diff_0, id1, percent_diff_1, "PASSED" if max(abs(diff_0), abs(diff_1)) < 1e-4 else "FAILED - "))
 
     print("\nINTEGRATED KINETIC TEST")
     print("=======================")
@@ -221,6 +221,10 @@ class Atom:
             self.d_coef = AtomData.d_coef.get(u_atom, None)
             self.d_n = AtomData.d_n.get(u_atom, None)
             self.d_occ = AtomData.d_occ.get(u_atom, [0, 0])
+            self.f_exp = AtomData.f_exp.get(u_atom, None)
+            self.f_coef = AtomData.f_coef.get(u_atom, None)
+            self.f_n = AtomData.f_n.get(u_atom, None)
+            self.f_occ = AtomData.f_occ.get(u_atom, [0, 0])
         except KeyError:
             raise KeyError('Error: Atom data for "{:}" missing'.format(element))
 
@@ -273,7 +277,7 @@ class Atom:
             lap_0 = np.zeros(r.shape)
             lap_1 = np.zeros(r.shape)
 
-        # Check that atom has occupied P orbitals
+        # Check if atom has occupied P orbitals
         if self.p_exp is not None:
             oP, doP, ddoP = self.get_orbitals(self.p_n, self.p_exp, self.p_coef, r)
 
@@ -290,7 +294,7 @@ class Atom:
             lap_0 += np.sum(self.p_occ[0][:,None]*lap_p, axis=0)
             lap_1 += np.sum(self.p_occ[1][:,None]*lap_p, axis=0)
 
-        # Check that atom has occupied D orbitals
+        # Check if atom has occupied D orbitals
         if self.d_exp is not None:
             oD, doD, ddoD = self.get_orbitals(self.d_n, self.d_exp, self.d_coef, r)
             den_0 += np.sum(self.d_occ[0][:,None]*oD**2, axis=0)
@@ -305,6 +309,22 @@ class Atom:
             lap_d = oD*ddoD + doD**2 + 2*oD*doD/r
             lap_0 += np.sum(self.d_occ[0][:,None]*lap_d, axis=0)
             lap_1 += np.sum(self.d_occ[1][:,None]*lap_d, axis=0)
+
+        # Check if atom has occupied F orbitals
+        if self.f_exp is not None:
+            oF, doF, ddoF = self.get_orbitals(self.f_n, self.f_exp, self.f_coef, r)
+            den_0 += np.sum(self.f_occ[0][:,None]*oF**2, axis=0)
+            den_1 += np.sum(self.f_occ[1][:,None]*oF**2, axis=0)
+
+            grd_0 += np.sum(self.f_occ[0][:,None]*oF*doF, axis=0)
+            grd_1 += np.sum(self.f_occ[1][:,None]*oF*doF, axis=0)
+
+            tau_0 += np.sum(self.f_occ[0][:,None]*(doF**2 + 12*(oF/r)**2), axis=0)
+            tau_1 += np.sum(self.f_occ[1][:,None]*(doF**2 + 12*(oF/r)**2), axis=0)
+
+            lap_f = oF*ddoF + doF**2 + 2*oF*doF/r
+            lap_0 += np.sum(self.f_occ[0][:,None]*lap_f, axis=0)
+            lap_1 += np.sum(self.f_occ[1][:,None]*lap_f, axis=0)
 
         # Take care of scaling
         den_0 /= 4*pi
@@ -556,7 +576,56 @@ class AtomData:
         'SB' : 51.0,
         'TE' : 52.0,
         'I'  : 53.0,
-        'XE' : 54.0
+        'XE' : 54.0,
+        'CS' : 55.0,
+        'BA' : 56.0,
+        'LA' : 57.0,
+        'CE' : 58.0,
+        'PR' : 59.0,
+        'ND' : 60.0,
+        'PM' : 61.0,
+        'SM' : 62.0,
+        'EU' : 63.0,
+        'GD' : 64.0,
+        'TB' : 65.0,
+        'DY' : 66.0,
+        'HO' : 67.0,
+        'ER' : 68.0,
+        'TM' : 69.0,
+        'YB' : 70.0,
+        'LU' : 71.0,
+        'HF' : 72.0,
+        'TA' : 73.0,
+        'W'  : 74.0,
+        'RE' : 75.0,
+        'OS' : 76.0,
+        'IR' : 77.0,
+        'PT' : 78.0,
+        'AU' : 79.0,
+        'HG' : 80.0,
+        'TL' : 81.0,
+        'PB' : 82.0,
+        'BI' : 83.0,
+        'PO' : 84.0,
+        'AT' : 85.0,
+        'RN' : 86.0,
+        'FR' : 87.0,
+        'RA' : 88.0,
+        'AC' : 89.0,
+        'TH' : 90.0,
+        'PA' : 91.0,
+        'U'  : 92.0,
+        'NP' : 93.0,
+        'PU' : 94.0,
+        'AM' : 95.0,
+        'CM' : 96.0,
+        'BK' : 97.0,
+        'CF' : 98.0,
+        'ES' : 99.0,
+        'FM' : 100.0,
+        'MD' : 101.0,
+        'NO' : 102.0,
+        'LR' : 103.0
     }
 
     electron_count = {}
@@ -617,34 +686,36 @@ class AtomData:
 
         # Add neutral atoms
         for a in self.nuclear_charge.keys():
-            self.electron_count[a]=self.nuclear_charge[a]
-            Etot, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc = parse("literature_data/k99l/neutral/{}".format(a.lower()))
-            self.add_entry(a, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc)
-
-            if False and a == 'LI':
-                print('Etot {}'.format(Etot))
-                print('Ekin {}'.format(Ekin))
-                print('ams {}'.format(ams))
-                print('ns {}'.format(ns))
-                print('xs {}'.format(xs))
-                print('cs {}'.format(cs))
-                print('socc {}'.format(socc))
+            # Light atoms
+            infile='literature_data/k99l/neutral/{}'.format(a.lower())
+            if os.path.isfile(infile):
+                self.electron_count[a]=self.nuclear_charge[a]
+                Etot, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc = parse(infile)
+                self.add_entry(a, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc)
+            # Heavy atoms
+            infile='literature_data/k00heavy/{}'.format(a.lower())
+            if os.path.isfile(infile):
+                self.electron_count[a]=self.nuclear_charge[a]
+                Etot, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc = parse(infile)
+                self.add_entry(a, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc)
 
         # Add cations and anions
         neutral_atoms = self.nuclear_charge.copy()
         for a in neutral_atoms.keys():
-            if os.path.isfile('literature_data/k99l/cation/{}.cat'.format(a.lower())):
+            infile='literature_data/k99l/cation/{}.cat'.format(a.lower())
+            if os.path.isfile(infile):
                 cata="{}+".format(a)
                 self.nuclear_charge[cata]=neutral_atoms[a]
                 self.electron_count[cata]=neutral_atoms[a]-1
-                Etot, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc = parse("literature_data/k99l/cation/{}.cat".format(a.lower()))
+                Etot, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc = parse(infile)
                 self.add_entry(cata, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc)
 
-            if os.path.isfile('literature_data/k99l/anion/{}.an'.format(a.lower())):
+            infile='literature_data/k99l/anion/{}.an'.format(a.lower())
+            if os.path.isfile(infile):
                 ana="{}-".format(a)
                 self.nuclear_charge[ana]=neutral_atoms[a]
                 self.electron_count[ana]=neutral_atoms[a]+1
-                Etot, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc = parse("literature_data/k99l/anion/{}.an".format(a.lower()))
+                Etot, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc = parse(infile)
                 self.add_entry(ana, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc)
 
 class GridGenerator:
