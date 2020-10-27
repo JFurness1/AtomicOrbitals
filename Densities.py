@@ -10,6 +10,12 @@ try:
 except ImportError:
     MAKE_MPL_COLOR_MAP = False
 
+try:
+    import pylibxc
+    HAVE_LIBXC = True
+except ImportError:
+    HAVE_LIBXC = False
+
 """
 Code to generate atomic electron densities, analytical gradients and orbital kinetic energy
 densities from Slater orbitals.
@@ -397,6 +403,74 @@ class Atom:
         Returns RGB color of element for plotting.
         """
         return COLOR_DICT[self.element]
+
+    def libxc_eval(self, r, functional='gga_x_pbe', restricted=False, threshold=None):
+        '''Evaluates a functional with the atomic density data using libxc'''
+
+        d0, d1, g0, g1, t0, t1, l0, l1 = self.get_densities(r)
+
+        if not HAVE_LIBXC:
+            raise ImportError('Cannot evaluate functional sinc pylibxc could not be imported.')
+
+        func = pylibxc.LibXCFunctional(functional, "unpolarized" if restricted else "polarized")
+
+        # Did we get a threshold?
+        if threshold is not None:
+            func.set_dens_threshold(threshold)
+
+        # Create input
+        inp = {}
+        if restricted:
+            inp["rho"] = d0+d1
+            inp["sigma"] = np.multiply(g0+g1,g0+g1)
+            inp["lapl"]= l0+l1
+            inp["tau"]= t0+t1
+        else:
+            rho_array = np.zeros((d0.size,2), dtype='float64')
+            sigma_array = np.zeros((d0.size,3), dtype='float64')
+            lapl_array = np.zeros((d0.size,2), dtype='float64')
+            tau_array = np.zeros((d0.size,2), dtype='float64')
+
+            rho_array[:,0]=d0
+            rho_array[:,1]=d1
+
+            sigma_array[:,0]=np.multiply(g0, g0)
+            sigma_array[:,1]=np.multiply(g0, g1)
+            sigma_array[:,2]=np.multiply(g1, g1)
+
+            lapl_array[:,0]=l0
+            lapl_array[:,1]=l1
+
+            tau_array[:,0]=t0
+            tau_array[:,1]=t1
+
+            inp["rho"] = rho_array
+            inp["sigma"] = sigma_array
+            inp["lapl"]= lapl_array
+            inp["tau"]= tau_array
+
+        # Compute functional
+        ret = func.compute(inp)
+
+        # Get energy density per particle
+        zk = ret.get("zk", np.zeros_like(d0))
+        # Energy density
+        nE = np.multiply(zk,d0+d1)
+
+        # First derivatives
+        vrho = ret["vrho"]
+        vsigma = ret.get("vsigma", np.zeros_like(inp["sigma"]))
+        vtau = ret.get("vtau", np.zeros_like(inp["tau"]))
+        vlapl = ret.get("vlapl", np.zeros_like(inp["lapl"]))
+        # Earlier versions of PyLibXC return the wrong shape, so reshape
+        # just to be sure
+        vrho = np.reshape(vrho, inp["rho"].shape)
+        vsigma = np.reshape(vsigma, inp["sigma"].shape)
+        vlapl = np.reshape(vlapl, inp["lapl"].shape)
+        vtau = np.reshape(vtau, inp["tau"].shape)
+
+        return nE, vrho, vsigma, vtau, vlapl
+
 
 def static_init(cls):
     if getattr(cls, "static_init", None):
