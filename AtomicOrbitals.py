@@ -16,37 +16,52 @@ try:
 except ImportError:
     HAVE_LIBXC = False
 
-"""
-Code to generate atomic electron densities, analytical gradients and orbital kinetic energy
-densities from Slater orbitals.
+"""Code to calculate the electron density, its gradient and laplacian,
+as well as the local kinetic energy density from analytic Slater-type
+orbital expansions of atomic Hartree-Fock wave functions published in
+the literature.
 
-Core functionality comes from Atom() class which implements the get_densities(r) function
-to return quantities for numpy array of radial points r.
+Although the best-known Hartree-Fock wave functions for atoms are the
+ones published by Clementi and Roetti in 1974, their wave functions
+have significant errors (up to millihartree), especially for the
+heavier atoms. Instead, the wave functions included in this library
+for H-Xe and their cations and anions are from
 
-Orbital data are stored in static AtomData class which implements dictionaries of parameters
-for different atom types accessed by upper case element symbols. New elements should be added
-as entries into these dictionaries. Default orbital parameters are taken from:
+Koga et al, "Analytical Hartree–Fock wave functions subject to cusp
+and asymptotic constraints: He to Xe, Li+ to Cs+, H− to I−",
+Int. J. Quantum Chem. 71, 491 (1999),
+doi: 10.1002/(SICI)1097-461X(1999)71:6<491::AID-QUA6>3.0.CO;2-T
 
-The GridGenerator gives a simple implementation of an efficient Gauss-Legendre quadrature
-grid.
+which yield total eneregies that deviate from the exact numerical
+solution only by microhartrees. Included are also non-relativistic
+Hartree-Fock wave functions for heavier atoms from
 
-A color dictionary following colors used by Jmol (roughly CPK) by element symbol.
-Should be accessed using get_colors_for_elements() which returns a list of RGB for an input
-list of string element labels or Atom objects.
+Koga et al, "Analytical Hartree–Fock wave functions for the atoms Cs
+to Lr", Theor. Chem. Acc. 104, 411 (2000), doi: 10.1007/s002140000150
 
-Enrico Clementi, Carla Roetti,
-Roothaan-Hartree-Fock atomic wavefunctions: Basis functions and their coefficients for
-ground and certain excited states of neutral and ionized atoms, Z<=54,
-Atomic Data and Nuclear Data Tables,
-Volume 14, Issues 3-4,
-1974,
-Pages 177-478,
-ISSN 0092-640X,
-https://doi.org/10.1016/S0092-640X(74)80016-1.
+which have an average error of 0.19 mEh compared to exact, fully
+numerical calculations.
+
+The core functionality of the library comes from the Atom() class
+which implements the get_densities(r) function to return the
+above-mentioned quantities at a given numpy array of radial points r.
+
+The Hartree-Fock orbital data are stored in the static AtomData class,
+which implements dictionaries of parameters for various elements that
+are accessed by upper-case element symbols.
+
+The GridGenerator gives a simple implementation of an efficient
+Gauss-Legendre quadrature grid.
+
+A color dictionary following colors used by Jmol (roughly CPK) by
+element symbol.  Should be accessed using get_colors_for_elements()
+which returns a list of RGB for an input list of string element labels
+or Atom objects.
 
 Module is Python 2 and 3 compatible.
 
-Example use can be seen in test_densities() function.
+Examples of use can be seen in test_densities() function.
+
 """
 
 
