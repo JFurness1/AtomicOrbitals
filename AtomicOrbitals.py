@@ -501,6 +501,8 @@ class Atom:
 
         # Get energy density per particle
         zk = ret.get("zk", np.zeros_like(d0))
+        if zk.shape != d0.shape:
+            zk = np.reshape(zk, d0.shape)
         # Energy density
         nE = np.multiply(zk,d0+d1)
 
