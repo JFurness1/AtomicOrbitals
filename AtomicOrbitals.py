@@ -1,5 +1,5 @@
 import numpy as np
-from math import pi
+from math import pi, log
 from literature_data.parser import parse
 import os
 
@@ -85,7 +85,7 @@ def test_densities():
     so we can have confidence.
     """
 
-    actual, r, wt = GridGenerator.make_grid(200)
+    actual, r, wt = GridGenerator.make_grid(400)
     grid = 4*pi*r**2*wt
 
     data = AtomData()
@@ -745,27 +745,94 @@ class GridGenerator:
         np.sum(f(r)*4*pi*weight*r**2)
     """
     @staticmethod
-    def make_grid(n):
+    def make_grid(n, gl=False):
         """
-        Generate a Gauss-Legendre grid for n points.
+        Generate a radial integration grid containing n points.
             n: desired grid points
+           gl: two-part Gauss-Legendre instead of one-part modified Chebyshev
         OUT:
-            n: number of grid points (note: may be different to that requested)
+            n: number of grid points (note: may be different from that requested)
             r: numpy array of coordinates
             wt: numpy array of weights
         """
-        low = 0.0 # Lower Range
-        high = 1.0
-        p = 0.5
 
-        n, r, wt = GridGenerator.gaussp(low, high, n)
-        r = np.concatenate((r, np.zeros((n))))
-        wt = np.concatenate((wt, np.zeros((n))))
-        for i in range(n):
-            r[2*n-(i+1)] = (1.0/r[i])**2
-            wt[2*n-(i+1)] = (wt[i]/p)*r[2*n - (i+1)]**1.5
+        if gl:
+            low = 0.0 # Lower Range
+            high = 1.0
+            p = 0.5
+
+            # The method here uses 2*n points so halve it
+            n, r, wt = GridGenerator.gaussp(low, high, n//2)
+            r = np.concatenate((r, np.zeros((n))))
+            wt = np.concatenate((wt, np.zeros((n))))
+            for i in range(n):
+                r[2*n-(i+1)] = (1.0/r[i])**2
+                wt[2*n-(i+1)] = (wt[i]/p)*r[2*n - (i+1)]**1.5
+        else:
+            n, r, wt = GridGenerator.radial_chebyshev(n)
 
         return n, r, wt
+
+    @staticmethod
+    def chebyshev(n):
+        """Modified Gauss-Chebyshev quadrature of the second kind for
+        calculating \int_{-1}^{1} f(x) dx = \sum_i w_i f(x_i).
+
+        Returns n, x, w.
+
+        See eqns (31)-(33) in J. M. Pérez‐Jordá, A. D. Becke, and
+        E. San‐Fabián, Automatic numerical integration techniques for
+        polyatomic molecules, J. Chem. Phys. 100, 6520 (1994);
+        doi:10.1063/1.467061
+
+        """
+
+        # 1/(n+1)
+        oonpp=1.0/(n+1.0)
+
+        # Index vector
+        ivec = np.asarray([ i for i in range(1,n+1)])
+        # Angles for sine and cosine
+        angles = ivec*pi*oonpp
+        # Sines and cosines
+        sines = np.sin(angles)
+        cosines = np.cos(angles)
+        # Sine squared
+        sinesq = np.power(sines,2)
+        sinecos = np.multiply(sines,cosines)
+
+        # Integration weights
+        w = 16.0/3.0/(n+1.0) * np.power(sinesq,2)
+        # Integration nodes
+        x = 1.0 - 2.0*ivec*oonpp + 2/pi*np.multiply(1.0 + 2.0/3.0*sinesq, sinecos)
+
+        return n, x, w
+
+    @staticmethod
+    def radial_chebyshev(n):
+        """Gauss-Chebyshev quadrature for calculating \int_{0}^{\infty} r^2
+        f(r) dr = \sum_i w_i r_i^2 f(r_i).
+
+        Returns n, x, w.
+
+        Uses chebyshev() to get the quadrature weights for the [-1, 1]
+        interval, and then uses a logarithmic transformation
+
+        r = 1/log(2) log(2/(1-x)) <=> x = 1 - 2^(1-r)
+
+        to get the corresponding radial rule.
+
+        See eqn (13) in M. Krack and A. M. Köster, An adaptive
+        numerical integrator for molecular integrals,
+        J. Chem. Phys. 108, 3226 (1998); doi:10.1063/1.475719
+
+        """
+
+        n, x, w = GridGenerator.chebyshev(n)
+        r = 1.0/log(2.0)*np.log(2.0/(1.0-x))
+        wr = np.multiply(w, 1.0/(log(2.0)*(1.0-x)))
+
+        return n, r, wr
 
     @staticmethod
     def gaussp(y1, y2, n):
