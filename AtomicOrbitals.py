@@ -1,5 +1,5 @@
 import numpy as np
-from math import pi, log
+from math import pi, log, factorial
 from literature_data.parser import parse
 import os
 
@@ -205,10 +205,6 @@ class Atom:
     and returns the corresponding densities.
     """
 
-    # Static principal quantum number factors
-    FACTORS = np.array([2.0, 24.0, 720.0, 40320.0, 3628800.0])**(-0.5)
-
-
     def __init__(self, element):
         # Currently only deal with atomic symbols.
         # Eventually add dictionary to support full names and numbers?
@@ -382,46 +378,58 @@ class Atom:
         ddof = np.einsum('ij,jk->ik', coefficients, ddf)
         return of, dof, ddof
 
-    def G(self, n, e, r):
-        """
-        Evaluates slater orbitals.
+    def G(self, n, zeta, r):
+        """Evaluates the radial Slater orbital R(r) = N r^{n-1} exp(-zeta r)
+
+        arguments:
             n: principal quantum number
-            e: exponent
-            r: space coordinate. (distance from nucleus)
+         zeta: exponent
+            r: distance from nucleus
+
         """
-        n_facs = self.FACTORS[n - 1]
+
+        # Principal quantum number factors for STO normalization
+        FACTORS = np.array([factorial(2*nn) for nn in range(1,max(n)+1)])**(-0.5)
+        n_facs = FACTORS[n - 1]
         try:
-            c = n_facs*(2.0*e)**(n + 0.5)
+            c = n_facs*(2.0*zeta)**(n + 0.5)
         except ValueError:
             print("Exponents and principal number factors are different shapes.")
             print("Did you typo a ',' for a decimal point? e.g. '1,23456' for '1.23456'")
             raise ValueError("exponent or principal number error")
         rn = np.power.outer(r, (n - 1))
         es = np.einsum('j,ij->ji', c, rn)
-        pw = np.exp(-np.outer(e, r))
+        pw = np.exp(-np.outer(zeta, r))
         return es*pw
 
     def DG(self, n, e, r, f):
-        """
-        Evaluates first derivative of slater orbitals.
+        """Evaluates the first derivative R'(r) of the radial Slater orbital
+        R(r) = N r^{n-1} exp(-zeta r) as R'(r) = [(n-1)/r - zeta] R(r).
+
+        arguments:
             n: principal quantum number
-            e: exponent
-            r: space coordinate. (distance from nucleus)
-            f: Undifferentiated function
+         zeta: exponent
+            r: distance from nucleus
+            f: undifferentiated function
+
         """
 
-        pre = np.add(-e[:, None], np.divide.outer((n - 1), r))
+        pre = -e[:, None] + np.divide.outer((n - 1), r)
         return pre*f
 
     def DDG(self, n, e, r, f):
-        """
-        Evaluates second derivative of slater orbitals.
+        """Evaluates the second derivative R''(r) of the radial Slater orbital
+        R(r) = N r^{n-1} exp(-zeta r) as
+        R''(r) = {[(n-1)/r - zeta]^2 - (n-1)/r^2} R(r)
+
+        arguments:
             n: principal quantum number
-            e: exponent
-            r: space coordinate. (distance from nucleus)
-            f: Undifferentiated function
+         zeta: exponent
+            r: distance from nucleus
+            f: undifferentiated function
+
         """
-        pre = np.add(-e[:, None], np.divide.outer((n - 1), r))**2
+        pre = (-e[:, None] + np.divide.outer((n - 1), r))**2
         pre -= np.divide.outer((n - 1), r**2)
         return pre*f
 
@@ -451,7 +459,7 @@ class Atom:
         """
         return COLOR_DICT[self.element]
 
-    def libxc_eval(self, r, functional='gga_x_pbe', restricted=False, threshold=None):
+    def libxc_eval(self, r, functional='gga_x_pbe', restricted=False, threshold=None, nan_check=False):
         '''Evaluates a functional with the atomic density data using libxc'''
 
         d0, d1, g0, g1, t0, t1, l0, l1 = self.get_densities(r)
@@ -517,6 +525,16 @@ class Atom:
         vsigma = np.reshape(vsigma, inp["sigma"].shape)
         vlapl = np.reshape(vlapl, inp["lapl"].shape)
         vtau = np.reshape(vtau, inp["tau"].shape)
+
+        if nan_check:
+            # Indices of NaNs
+            nanidx = np.isnan(nE)
+            for i in range(len(nanidx)):
+                if nanidx[i]:
+                    if restricted:
+                        print('NaN at rho= {:e} sigmaa= {:e} lapl= {: e} tau={:e}'.format(rho_array[i],sigma_array[i], lapl_array[i], tau_array[i]))
+                    else:
+                        print('NaN at rhoa= {:e} rhob= {:e} sigmaaa= {:e} sigmaab= {: e} sigmabb= {:e} lapla= {: e} laplb= {: e} taua= {:e} taub={:e}'.format(d0[i],d1[i],sigma_array[i,0], sigma_array[i,1], sigma_array[i,2], l0[i], l1[i], t0[i], t1[i]))
 
         return nE, vrho, vsigma, vtau, vlapl
 
