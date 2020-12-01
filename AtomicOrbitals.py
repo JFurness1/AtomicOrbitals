@@ -459,7 +459,7 @@ class Atom:
         """
         return COLOR_DICT[self.element]
 
-    def libxc_eval(self, r, functional='gga_x_pbe', restricted=False, threshold=None, nan_check=False):
+    def libxc_eval(self, r, functional='gga_x_pbe', restricted=False, density_threshold=None, sigma_threshold=None, nan_check=False):
         '''Evaluates a functional with the atomic density data using libxc'''
 
         d0, d1, g0, g1, t0, t1, l0, l1 = self.get_densities(r)
@@ -470,8 +470,10 @@ class Atom:
         func = pylibxc.LibXCFunctional(functional, "unpolarized" if restricted else "polarized")
 
         # Did we get a threshold?
-        if threshold is not None:
-            func.set_dens_threshold(threshold)
+        if density_threshold is not None:
+            func.set_dens_threshold(density_threshold)
+        if sigma_threshold is not None:
+            func.set_sigma_threshold(sigma_threshold)
 
         # Create input
         inp = {}
@@ -850,7 +852,8 @@ class GridGenerator:
         r = 1.0/log(2.0)*np.log(2.0/(1.0-x))
         wr = np.multiply(w, 1.0/(log(2.0)*(1.0-x)))
 
-        return n, r, wr
+        # Get radii in increasing order
+        return n, np.flip(r), np.flip(wr)
 
     @staticmethod
     def gaussp(y1, y2, n):
