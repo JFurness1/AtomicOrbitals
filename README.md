@@ -96,7 +96,9 @@ HelFEM.</p>
 <p>The module's main interface is the <code>Atom</code> class that is
 initialised with the desired atomic element symbol:</p>
 
-```python import Densities neon = Densities.Atom("Ne") ```
+```python 
+import Densities neon = Densities.Atom("Ne")
+```
 
 <p>Calling the initialised atom's <code>get_densities(r)</code> method
 with a distance from the nucleus (in atomic units) will return the
