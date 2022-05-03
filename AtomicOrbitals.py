@@ -161,7 +161,7 @@ def test_densities():
 
     # First the first central difference
     fdiff = (d0[2:]-d0[:-2])/(2*fdh)  # Construct the central difference
-    if np.allclose(fdiff, g0[1:-1], atol=1e-1):  # finite difference is not perfect, so lenient tollerance
+    if np.allclose(fdiff, g0[1:-1], atol=1e-1):  # finite difference is not perfect, so lenient tolerance
         print("Gradient: PASSED")
     else:
         print("Gradient: FAILED -")
@@ -721,16 +721,19 @@ class AtomData:
     def static_init(self):
         '''Initialize the data storage by reading in the tabulated wave functions'''
 
+        # Find where the current file is
+        curpath = os.path.dirname(os.path.abspath(__file__))
+
         # Add neutral atoms
         for a in self.nuclear_charge.keys():
             # Light atoms
-            infile='literature_data/k99l/neutral/{}'.format(a.lower())
+            infile='{}/literature_data/k99l/neutral/{}'.format(curpath, a.lower())
             if os.path.isfile(infile):
                 self.electron_count[a]=self.nuclear_charge[a]
                 Etot, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc = parse(infile)
                 self.add_entry(a, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc)
             # Heavy atoms
-            infile='literature_data/k00heavy/{}'.format(a.lower())
+            infile='{}/literature_data/k00heavy/{}'.format(curpath, a.lower())
             if os.path.isfile(infile):
                 self.electron_count[a]=self.nuclear_charge[a]
                 Etot, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc = parse(infile)
@@ -739,7 +742,7 @@ class AtomData:
         # Add cations and anions
         neutral_atoms = self.nuclear_charge.copy()
         for a in neutral_atoms.keys():
-            infile='literature_data/k99l/cation/{}.cat'.format(a.lower())
+            infile='{}/literature_data/k99l/cation/{}.cat'.format(curpath, a.lower())
             if os.path.isfile(infile):
                 cata="{}+".format(a)
                 self.nuclear_charge[cata]=neutral_atoms[a]
@@ -747,7 +750,7 @@ class AtomData:
                 Etot, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc = parse(infile)
                 self.add_entry(cata, Ekin, ams, ns, xs, cs, socc, pocc, docc, focc)
 
-            infile='literature_data/k99l/anion/{}.an'.format(a.lower())
+            infile='{}/literature_data/k99l/anion/{}.an'.format(curpath, a.lower())
             if os.path.isfile(infile):
                 ana="{}-".format(a)
                 self.nuclear_charge[ana]=neutral_atoms[a]
