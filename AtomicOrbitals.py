@@ -903,6 +903,41 @@ class GridGenerator:
         return n, x, w
 
     @staticmethod
+    def chebyshev_halfinterval(n):
+        """Modified Gauss-Chebyshev quadrature of the second kind for
+        calculating \int_{0}^{1} f(x) dx = \sum_i w_i f(x_i).
+
+        Returns n, x, w.
+
+        See eqns (31)-(33) in J. M. Pérez‐Jordá, A. D. Becke, and
+        E. San‐Fabián, Automatic numerical integration techniques for
+        polyatomic molecules, J. Chem. Phys. 100, 6520 (1994);
+        doi:10.1063/1.467061
+
+        """
+        n, xc, wc = GridGenerator.chebyshev(n)
+        # Translate weights from [-1, 1] to [0, 1]
+        xi = 0.5*(xc+1.0)
+        wi = 0.5*wc
+        return n, xi, wi
+
+    @staticmethod
+    def trapezoid_halfinterval(n):
+        """Trapezoidal rule for \int_{0}^{1} f(x) dx = \sum_i w_i f(x_i).
+
+        Returns n, x, w.
+
+        No point is placed at the nucleus since the quadrature weight
+        vanishes there anyhow.
+        """
+        # Trapezoidal nodes
+        xi = np.asarray(range(1,n+1))/(n+1.0)
+        # Weights
+        wi = np.ones_like(xi)/(n+1.0)
+
+        return n, xi, wi
+
+    @staticmethod
     def radial_chebyshev(n):
         """Gauss-Chebyshev quadrature for calculating \int_{0}^{\infty} r^2
         f(r) dr = \sum_i w_i r_i^2 f(r_i).
@@ -968,15 +1003,17 @@ class GridGenerator:
         See eqns (18)-(20) in P. M. W. Gill, S.-H. Chien, Radial
         Quadrature for Multiexponential Integrands,
         J. Comput. Chem. 24, 732 (2003). doi:10.1002/jcc.10211
+        Note that this routine uses Chebyshev quadrature instead of
+        the trapezoidal quadrature of the above paper.
 
         """
 
-        # Trapezoidal nodes
-        xi = np.asarray(range(1,n+1))/(n+1.0)
+        # Get the quadrature rule in [0, 1]
+        n, xi, wi = GridGenerator.chebyshev_halfinterval(n)
         # Integration nodes
         x = np.divide(np.power(xi, 2), np.power(1.0-xi,2))*R
         # Integration weights
-        w = np.divide(2*np.power(xi,5), (n+1)*np.power(1.0-xi,7))*R**3
+        w = np.multiply(wi, np.divide(2*np.power(xi,5), np.power(1.0-xi,7))*R**3)
 
         return n, x, w
 
@@ -996,18 +1033,15 @@ class GridGenerator:
         See eqns (28)-(30) in P. M. W. Gill, S.-H. Chien, Radial
         Quadrature for Multiexponential Integrands,
         J. Comput. Chem. 24, 732 (2003). doi:10.1002/jcc.10211.
+
         However, that paper seems to be wrong in the quadrature rule;
         Molpro's manual states that Gauss quadrature is used in the x
         space instead of the trapezoidal rule, so this routine uses
         Chebyshev quadrature.
         """
 
-        n, xc, wc = GridGenerator.chebyshev(n)
-
-        # Translate weights from [-1, 1] to [0, 1]
-        xi = 0.5*(xc+1.0)
-        wi = 0.5*wc
-
+        # Get the quadrature rule in [0, 1]
+        n, xi, wi = GridGenerator.chebyshev_halfinterval(n)
         # Form the quadrature rule
         x = -R*np.log(1-xi**m)
         w = np.multiply(wi, np.divide(m*(xi**(m-1))*np.log(1-(xi**m))**2, (1.0-xi**m))*R**3)
