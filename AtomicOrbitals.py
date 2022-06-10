@@ -859,6 +859,12 @@ class GridGenerator:
             n, r, wt = GridGenerator.radial_muraknowles(n)
         else:
             raise ValueError('Unknown grid {}'.format(method))
+
+        # Eliminate any zero weights
+        r = r[wt!=0.0]
+        wt = wt[wt!=0.0]
+        n = len(r)
+
         return n, r, wt
 
     @staticmethod
@@ -989,16 +995,22 @@ class GridGenerator:
 
         See eqns (28)-(30) in P. M. W. Gill, S.-H. Chen, Radial
         Quadrature for Multiexponential Integrands,
-        J. Comput. Chem. 24, 732 (2003). doi:10.1002/jcc.10211
-
+        J. Comput. Chem. 24, 732 (2003). doi:10.1002/jcc.10211.
+        However, that paper seems to be wrong in the quadrature rule;
+        Molpro's manual states that Gauss quadrature is used in the x
+        space instead of the trapezoidal rule, so this routine uses
+        Chebyshev quadrature.
         """
 
-        # Trapezoidal nodes
-        xi = np.asarray(range(1,n+1))/(n+1.0)
-        # Integration nodes
+        n, xc, wc = GridGenerator.chebyshev(n)
+
+        # Translate weights from [-1, 1] to [0, 1]
+        xi = 0.5*(xc+1.0)
+        wi = 0.5*wc
+
+        # Form the quadrature rule
         x = -R*np.log(1-xi**m)
-        # Integration weights
-        w = np.divide(m*(xi**(m-1))*np.log(1-(xi**m))**2, (n+1)*(1.0-xi**m))*R**3
+        w = np.multiply(wi, np.divide(m*(xi**(m-1))*np.log(1-(xi**m))**2, (1.0-xi**m))*R**3)
 
         return n, x, w
 
