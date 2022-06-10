@@ -975,12 +975,15 @@ class GridGenerator:
         return n, x, w
 
     @staticmethod
-    def radial_muraknowles(n, R=1.0):
-        """Handy grid for calculating \int_{0}^{\infty} x^2 f(x) dx = \sum_i w_i f(x_i).
+    def radial_muraknowles(n, R=1.0, m=3):
+        """Mura-Knowles grid for calculating \int_{0}^{\infty} x^2 f(x) dx = \sum_i w_i f(x_i).
 
         Described in M. E. Mura, P. J. Knowles, Improved radial grids
         for quadrature in molecular density-functional calculations,
         J. Chem. Phys. 104, 9848 (1996). doi:10.1063/1.471749
+
+        By default, generates the Log3 grid corresponding to m=3; the
+        value of m can be given as an optional input parameter.
 
         Returns n, x, w.
 
@@ -993,9 +996,9 @@ class GridGenerator:
         # Trapezoidal nodes
         xi = np.asarray(range(1,n+1))/(n+1.0)
         # Integration nodes
-        x = -R*np.log(1-xi**3)
+        x = -R*np.log(1-xi**m)
         # Integration weights
-        w = np.divide(3*(xi**2)*np.log(1-(xi**3))**2, (n+1)*(1.0-xi**3))*R**3
+        w = np.divide(m*(xi**(m-1))*np.log(1-(xi**m))**2, (n+1)*(1.0-xi**m))*R**3
 
         return n, x, w
 
