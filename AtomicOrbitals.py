@@ -936,7 +936,7 @@ class GridGenerator:
 
         Returns n, x, w.
 
-        See eqns (8)-(10) in P. M. W. Gill, S.-H. Chen, Radial
+        See eqns (8)-(10) in P. M. W. Gill, S.-H. Chien, Radial
         Quadrature for Multiexponential Integrands,
         J. Comput. Chem. 24, 732 (2003). doi:10.1002/jcc.10211
 
@@ -965,7 +965,7 @@ class GridGenerator:
 
         Returns n, x, w.
 
-        See eqns (18)-(20) in P. M. W. Gill, S.-H. Chen, Radial
+        See eqns (18)-(20) in P. M. W. Gill, S.-H. Chien, Radial
         Quadrature for Multiexponential Integrands,
         J. Comput. Chem. 24, 732 (2003). doi:10.1002/jcc.10211
 
@@ -993,7 +993,7 @@ class GridGenerator:
 
         Returns n, x, w.
 
-        See eqns (28)-(30) in P. M. W. Gill, S.-H. Chen, Radial
+        See eqns (28)-(30) in P. M. W. Gill, S.-H. Chien, Radial
         Quadrature for Multiexponential Integrands,
         J. Comput. Chem. 24, 732 (2003). doi:10.1002/jcc.10211.
         However, that paper seems to be wrong in the quadrature rule;
