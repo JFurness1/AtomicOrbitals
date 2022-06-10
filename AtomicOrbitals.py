@@ -16,6 +16,18 @@ try:
 except ImportError:
     HAVE_LIBXC = False
 
+try:
+    import xcfun
+    HAVE_XCFUN = True
+except ImportError:
+    HAVE_XCFUN = False
+
+try:
+    import scipy
+    HAVE_SCIPY = True
+except ImportError:
+    HAVE_SCIPY = False
+
 """Code to calculate the electron density, its gradient and laplacian,
 as well as the local kinetic energy density from analytic Slater-type
 orbital expansions of atomic Hartree-Fock wave functions published in
@@ -86,7 +98,7 @@ def test_densities():
     """
 
     actual, r, wt = GridGenerator.make_grid(400)
-    grid = 4*pi*r**2*wt
+    grid = 4*pi*wt
 
     data = AtomData()
 
@@ -352,6 +364,22 @@ class Atom:
 
         return den_0, den_1, grd_0, grd_1, tau_0, tau_1, lap_0, lap_1
 
+    def get_range(self):
+        """
+        Evaluates the maximum range of the basis, at which the exponential factor for the smallest exponent is numerically zero.
+        """
+        min_exp = np.finfo(np.core.numerictypes.float64).max
+        if self.s_exp is not None:
+            min_exp = min(min_exp, min(self.s_exp))
+        if self.p_exp is not None:
+            min_exp = min(min_exp, min(self.p_exp))
+        if self.d_exp is not None:
+            min_exp = min(min_exp, min(self.d_exp))
+        if self.f_exp is not None:
+            min_exp = min(min_exp, min(self.f_exp))
+        max_range = -log(np.finfo(np.core.numerictypes.float64).tiny)/min_exp
+        return max_range
+
     def get_orbitals(self, q_numbers, exponents, coefficients, r):
         """
         Evaluates Slater orbitals at position r.
@@ -459,13 +487,13 @@ class Atom:
         """
         return COLOR_DICT[self.element]
 
-    def libxc_eval(self, r, functional='gga_x_pbe', restricted=False, density_threshold=None, sigma_threshold=None, nan_check=False):
+    def libxc_eval(self, r, functional='gga_x_pbe', restricted=False, density_threshold=None, sigma_threshold=None, nan_check=False, ext_params=None):
         '''Evaluates a functional with the atomic density data using libxc'''
 
         d0, d1, g0, g1, t0, t1, l0, l1 = self.get_densities(r)
 
         if not HAVE_LIBXC:
-            raise ImportError('Cannot evaluate functional sinc pylibxc could not be imported.')
+            raise ImportError('Cannot evaluate functional since pylibxc could not be imported.')
 
         func = pylibxc.LibXCFunctional(functional, "unpolarized" if restricted else "polarized")
 
@@ -474,6 +502,10 @@ class Atom:
             func.set_dens_threshold(density_threshold)
         if sigma_threshold is not None:
             func.set_sigma_threshold(sigma_threshold)
+
+        # Did we get external parameters?
+        if ext_params is not None:
+            func.set_ext_params(ext_params)
 
         # Create input
         inp = {}
@@ -531,6 +563,9 @@ class Atom:
         if nan_check:
             # Indices of NaNs
             nanidx = np.isnan(nE)
+            if len(nE[nanidx]):
+                print('nanidx len={} with {} nans'.format(nanidx.size, len(nE[nanidx])))
+            #print('NaN densities\n{}'.format((d0+d1)[nanidx]))
             for i in range(len(nanidx)):
                 if nanidx[i]:
                     if restricted:
@@ -539,6 +574,37 @@ class Atom:
                         print('NaN at rhoa= {:e} rhob= {:e} sigmaaa= {:e} sigmaab= {: e} sigmabb= {:e} lapla= {: e} laplb= {: e} taua= {:e} taub={:e}'.format(d0[i],d1[i],sigma_array[i,0], sigma_array[i,1], sigma_array[i,2], l0[i], l1[i], t0[i], t1[i]))
 
         return nE, vrho, vsigma, vtau, vlapl
+
+
+    def xcfun_eval(self, r, functional='PBEX', restricted=False):
+        '''Evaluates a functional with the atomic density data using XCFun'''
+
+        d0, d1, g0, g1, t0, t1, l0, l1 = self.get_densities(r)
+
+        if not HAVE_XCFUN:
+            raise ImportError('Cannot evaluate functional since xcfun could not be imported.')
+
+        # Initialize functional
+        func = xcfun.Functional(functional)
+
+        # Create input
+        if restricted:
+            density = d0+d1
+            densgrad = np.zeros((r.size, 3))
+            densgrad[:,0] = g0 + g1
+            res = func.eval_energy_n(density, densgrad)
+
+        else:
+            density = np.zeros((r.size, 2))
+            density[:,0] = d0
+            density[:,1] = d1
+
+            densgrad = np.zeros((r.size, 3, 2))
+            densgrad[:,0,0] = g0
+            densgrad[:,0,1] = g1
+            res = func.eval_energy_ab(density, densgrad)
+
+        return res
 
 
 def static_init(cls):
@@ -768,32 +834,31 @@ class GridGenerator:
         np.sum(f(r)*4*pi*weight*r**2)
     """
     @staticmethod
-    def make_grid(n, gl=False):
+    def make_grid(n, method='krack'):
         """
         Generate a radial integration grid containing n points.
             n: desired grid points
-           gl: two-part Gauss-Legendre instead of one-part modified Chebyshev
+            method:
+               'krack' : parameter-free Ahlrichs grid with alpha=0 and R=1
+               'handy' : Murray-Handy-Laming quadrature
+               'muraknowles' : Mura-Knowles quadrature
         OUT:
             n: number of grid points (note: may be different from that requested)
             r: numpy array of coordinates
             wt: numpy array of weights
         """
 
-        if gl:
-            low = 0.0 # Lower Range
-            high = 1.0
-            p = 0.5
-
-            # The method here uses 2*n points so halve it
-            n, r, wt = GridGenerator.gaussp(low, high, n//2)
-            r = np.concatenate((r, np.zeros((n))))
-            wt = np.concatenate((wt, np.zeros((n))))
-            for i in range(n):
-                r[2*n-(i+1)] = (1.0/r[i])**2
-                wt[2*n-(i+1)] = (wt[i]/p)*r[2*n - (i+1)]**1.5
-        else:
+        if method == 'krack':
             n, r, wt = GridGenerator.radial_chebyshev(n)
-
+# The Laguerre quadrature doesn't appear to work for the wanted numbers of quadrature points
+#        elif method == 'laguerre':
+#            n, r, wt = GridGenerator.radial_laguerre(n)
+        elif method == 'handy':
+            n, r, wt = GridGenerator.radial_handy(n)
+        elif method == 'muraknowles':
+            n, r, wt = GridGenerator.radial_muraknowles(n)
+        else:
+            raise ValueError('Unknown grid {}'.format(method))
         return n, r, wt
 
     @staticmethod
@@ -853,10 +918,86 @@ class GridGenerator:
 
         n, x, w = GridGenerator.chebyshev(n)
         r = 1.0/log(2.0)*np.log(2.0/(1.0-x))
-        wr = np.multiply(w, 1.0/(log(2.0)*(1.0-x)))
+        wr = np.multiply(w, 1.0/(log(2.0)*(1.0-x)))*r**2
 
         # Get radii in increasing order
         return n, np.flip(r), np.flip(wr)
+
+    @staticmethod
+    def radial_laguerre(n, R=1.0):
+        """Gauss-Laguerre quadrature of the second kind for
+        calculating \int_{0}^{\infty} x^2 f(x) dx = \sum_i w_i f(x_i).
+
+        Returns n, x, w.
+
+        See eqns (8)-(10) in P. M. W. Gill, S.-H. Chen, Radial
+        Quadrature for Multiexponential Integrands,
+        J. Comput. Chem. 24, 732 (2003). doi:10.1002/jcc.10211
+
+        """
+
+        if not HAVE_SCIPY:
+            raise RuntimeError('Need scipy for Laguerre weights')
+        # Get the roots of the Laguerre polynomials
+        from scipy.special import roots_laguerre, eval_laguerre
+        [xi, wi] = roots_laguerre(n)
+
+        # Integration weights
+        w = np.power(xi,3)*np.exp(xi)/((n+1) * eval_laguerre(n+1, xi))**2*R**3
+        # Integration nodes
+        x = xi*R
+
+        return n, x, w
+
+    @staticmethod
+    def radial_handy(n, R=1.0):
+        """Handy grid for calculating \int_{0}^{\infty} x^2 f(x) dx = \sum_i w_i f(x_i).
+
+        Described in C. W. Murray, N. C. Handy, and G. J. Laming,
+        Quadrature schemes for integrals of density functional theory,
+        Mol. Phys. 78, 997 (1993). doi:10.1080/00268979300100651
+
+        Returns n, x, w.
+
+        See eqns (18)-(20) in P. M. W. Gill, S.-H. Chen, Radial
+        Quadrature for Multiexponential Integrands,
+        J. Comput. Chem. 24, 732 (2003). doi:10.1002/jcc.10211
+
+        """
+
+        # Trapezoidal nodes
+        xi = np.asarray(range(1,n+1))/(n+1.0)
+        # Integration nodes
+        x = np.divide(np.power(xi, 2), np.power(1.0-xi,2))*R
+        # Integration weights
+        w = np.divide(2*np.power(xi,5), (n+1)*np.power(1.0-xi,7))*R**3
+
+        return n, x, w
+
+    @staticmethod
+    def radial_muraknowles(n, R=1.0):
+        """Handy grid for calculating \int_{0}^{\infty} x^2 f(x) dx = \sum_i w_i f(x_i).
+
+        Described in M. E. Mura, P. J. Knowles, Improved radial grids
+        for quadrature in molecular density-functional calculations,
+        J. Chem. Phys. 104, 9848 (1996). doi:10.1063/1.471749
+
+        Returns n, x, w.
+
+        See eqns (28)-(30) in P. M. W. Gill, S.-H. Chen, Radial
+        Quadrature for Multiexponential Integrands,
+        J. Comput. Chem. 24, 732 (2003). doi:10.1002/jcc.10211
+
+        """
+
+        # Trapezoidal nodes
+        xi = np.asarray(range(1,n+1))/(n+1.0)
+        # Integration nodes
+        x = -R*np.log(1-xi**3)
+        # Integration weights
+        w = np.divide(3*(xi**2)*np.log(1-(xi**3))**2, (n+1)*(1.0-xi**3))*R**3
+
+        return n, x, w
 
     @staticmethod
     def gaussp(y1, y2, n):
