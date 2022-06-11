@@ -97,7 +97,7 @@ def test_densities():
     so we can have confidence.
     """
 
-    actual, r, wt = GridGenerator.make_grid(400)
+    actual, r, wt = GridGenerator.make_grid(400, 'ahlrichs')
     grid = 4*pi*wt
 
     data = AtomData()
@@ -830,18 +830,20 @@ class GridGenerator:
 
     Public facing method is make_grid(n)
 
-    Then spherical integration can be achieved using,
-        np.sum(f(r)*4*pi*weight*r**2)
+    Then spherical integration can be achieved using
+        np.sum(f(r)*4*pi*weight)
     """
     @staticmethod
-    def make_grid(n, method='krack'):
+    def make_grid(n, method='krack', R=1.0):
         """
         Generate a radial integration grid containing n points.
             n: desired grid points
             method:
-               'krack' : parameter-free Ahlrichs grid with alpha=0 and R=1
-               'handy' : Murray-Handy-Laming quadrature
+               'krack'       : parameter-free Ahlrichs M3 grid (default)
+               'ahlrichs'    : Ahlrichs M4 grid with alpha=0.6
+               'handy'       : Murray-Handy-Laming quadrature
                'muraknowles' : Mura-Knowles quadrature
+            R: atomic size adjustment parameter, default R=1.0
         OUT:
             n: number of grid points (note: may be different from that requested)
             r: numpy array of coordinates
@@ -849,7 +851,9 @@ class GridGenerator:
         """
 
         if method == 'krack':
-            n, r, wt = GridGenerator.radial_chebyshev(n)
+            n, r, wt = GridGenerator.radial_ahlrichs(n, alpha=0.0)
+        elif method == 'ahlrichs':
+            n, r, wt = GridGenerator.radial_ahlrichs(n, alpha=0.6)
 # The Laguerre quadrature doesn't appear to work for the wanted numbers of quadrature points
 #        elif method == 'laguerre':
 #            n, r, wt = GridGenerator.radial_laguerre(n)
@@ -864,6 +868,10 @@ class GridGenerator:
         r = r[wt!=0.0]
         wt = wt[wt!=0.0]
         n = len(r)
+
+        # Atomic scaling adjustment
+        r = r*R
+        wt = wt*R**3
 
         return n, r, wt
 
@@ -938,34 +946,45 @@ class GridGenerator:
         return n, xi, wi
 
     @staticmethod
-    def radial_chebyshev(n):
-        """Gauss-Chebyshev quadrature for calculating \int_{0}^{\infty} r^2
-        f(r) dr = \sum_i w_i r_i^2 f(r_i).
+    def radial_ahlrichs(n, alpha=0.6):
+        """Treutler-Ahlrichs M4 quadrature for calculating \int_{0}^{\infty}
+        r^2 f(r) dr = \sum_i w_i r_i^2 f(r_i).
 
         Returns n, x, w.
 
-        Uses chebyshev() to get the quadrature weights for the [-1, 1]
-        interval, and then uses a logarithmic transformation
+        See O. Treutler and R. Ahlrichs, Efficient molecular numerical
+        integration schemes, J. Chem. Phys. 102, 346 (1995), eqn (19).
 
-        r = 1/log(2) log(2/(1-x)) <=> x = 1 - 2^(1-r)
+        The radial transformation is given by
 
-        to get the corresponding radial rule.
+        r = 1/log(2) (1+x)^\alpha log(2/(1-x))
 
-        See eqn (13) in M. Krack and A. M. Köster, An adaptive
-        numerical integrator for molecular integrals,
-        J. Chem. Phys. 108, 3226 (1998); doi:10.1063/1.475719
+        where x are quadrature weights for the [-1, 1] interval, which
+        are obtained in this routine from the Chebyshev rule which is
+        described to have good performance in
+
+        M. Krack and A. M. Köster, An adaptive numerical integrator
+        for molecular integrals, J. Chem. Phys. 108, 3226 (1998);
+        doi:10.1063/1.475719
 
         """
 
         n, x, w = GridGenerator.chebyshev(n)
-        r = 1.0/log(2.0)*np.log(2.0/(1.0-x))
-        wr = np.multiply(w, 1.0/(log(2.0)*(1.0-x)))*r**2
+
+        if alpha == 0.0:
+            r = 1.0/log(2.0)*np.log(2.0/(1.0-x))
+            dr = 1.0/(log(2.0)*(1-x))
+        else:
+            r = 1.0/log(2.0)*(1+x)**alpha*np.log(2.0/(1.0-x))
+            dr = 1.0/log(2.0)*(alpha*(1+x)**(alpha-1.0)*np.log(2.0/(1.0-x)) + (1+x)**alpha/(1-x))
+
+        wr = w*dr*r**2
 
         # Get radii in increasing order
         return n, np.flip(r), np.flip(wr)
 
     @staticmethod
-    def radial_laguerre(n, R=1.0):
+    def radial_laguerre(n):
         """Gauss-Laguerre quadrature of the second kind for
         calculating \int_{0}^{\infty} x^2 f(x) dx = \sum_i w_i f(x_i).
 
@@ -984,14 +1003,14 @@ class GridGenerator:
         [xi, wi] = roots_laguerre(n)
 
         # Integration weights
-        w = np.power(xi,3)*np.exp(xi)/((n+1) * eval_laguerre(n+1, xi))**2*R**3
+        w = np.power(xi,3)*np.exp(xi)/((n+1) * eval_laguerre(n+1, xi))**2
         # Integration nodes
-        x = xi*R
+        x = xi
 
         return n, x, w
 
     @staticmethod
-    def radial_handy(n, R=1.0):
+    def radial_handy(n):
         """Handy grid for calculating \int_{0}^{\infty} x^2 f(x) dx = \sum_i w_i f(x_i).
 
         Described in C. W. Murray, N. C. Handy, and G. J. Laming,
@@ -1011,14 +1030,14 @@ class GridGenerator:
         # Get the quadrature rule in [0, 1]
         n, xi, wi = GridGenerator.chebyshev_halfinterval(n)
         # Integration nodes
-        x = np.divide(np.power(xi, 2), np.power(1.0-xi,2))*R
+        x = np.divide(np.power(xi, 2), np.power(1.0-xi,2))
         # Integration weights
-        w = np.multiply(wi, np.divide(2*np.power(xi,5), np.power(1.0-xi,7))*R**3)
+        w = np.multiply(wi, np.divide(2*np.power(xi,5), np.power(1.0-xi,7)))
 
         return n, x, w
 
     @staticmethod
-    def radial_muraknowles(n, R=1.0, m=3):
+    def radial_muraknowles(n, m=3):
         """Mura-Knowles grid for calculating \int_{0}^{\infty} x^2 f(x) dx = \sum_i w_i f(x_i).
 
         Described in M. E. Mura, P. J. Knowles, Improved radial grids
@@ -1043,8 +1062,8 @@ class GridGenerator:
         # Get the quadrature rule in [0, 1]
         n, xi, wi = GridGenerator.chebyshev_halfinterval(n)
         # Form the quadrature rule
-        x = -R*np.log(1-xi**m)
-        w = np.multiply(wi, np.divide(m*(xi**(m-1))*np.log(1-(xi**m))**2, (1.0-xi**m))*R**3)
+        x = -np.log(1-xi**m)
+        w = np.multiply(wi, np.divide(m*(xi**(m-1))*np.log(1-(xi**m))**2, (1.0-xi**m)))
 
         return n, x, w
 
