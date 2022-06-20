@@ -97,7 +97,7 @@ def test_densities():
     so we can have confidence.
     """
 
-    actual, r, wt = GridGenerator.make_grid(400, 'ahlrichs')
+    actual, r, wt = GridGenerator.make_grid(400, 'ahlrichsm3')
     grid = 4*pi*wt
 
     data = AtomData()
@@ -834,33 +834,34 @@ class GridGenerator:
         np.sum(f(r)*4*pi*weight)
     """
     @staticmethod
-    def make_grid(n, method='krack', R=1.0):
+    def make_grid(n, method='ahlrichsm3', R=1.0, quad='chebyshev'):
         """
         Generate a radial integration grid containing n points.
             n: desired grid points
             method:
-               'krack'       : parameter-free Ahlrichs M3 grid (default)
-               'ahlrichs'    : Ahlrichs M4 grid with alpha=0.6
-               'handy'       : Murray-Handy-Laming quadrature
-               'muraknowles' : Mura-Knowles quadrature
+               'ahlrichsm3'    : parameter-free Ahlrichs M3 grid (default)
+               'ahlrichsm4'    : Ahlrichs M4 grid with alpha=0.6
+               'handy'         : Murray-Handy-Laming quadrature
+               'muraknowles'   : Mura-Knowles quadrature
             R: atomic size adjustment parameter, default R=1.0
+            quad: quadrature scheme, 'chebyshev' (default) or 'trapezoidal'
         OUT:
             n: number of grid points (note: may be different from that requested)
             r: numpy array of coordinates
             wt: numpy array of weights
         """
 
-        if method == 'krack':
-            n, r, wt = GridGenerator.radial_ahlrichs(n, alpha=0.0)
-        elif method == 'ahlrichs':
-            n, r, wt = GridGenerator.radial_ahlrichs(n, alpha=0.6)
+        if  method=='ahlrichsm3' or method == 'krack':
+            n, r, wt = GridGenerator.radial_ahlrichs(n, alpha=0.0, quad=quad)
+        elif method == 'ahlrichsm4':
+            n, r, wt = GridGenerator.radial_ahlrichs(n, alpha=0.6, quad=quad)
 # The Laguerre quadrature doesn't appear to work for the wanted numbers of quadrature points
 #        elif method == 'laguerre':
 #            n, r, wt = GridGenerator.radial_laguerre(n)
         elif method == 'handy':
-            n, r, wt = GridGenerator.radial_handy(n)
+            n, r, wt = GridGenerator.radial_handy(n, quad=quad)
         elif method == 'muraknowles':
-            n, r, wt = GridGenerator.radial_muraknowles(n)
+            n, r, wt = GridGenerator.radial_muraknowles(n, quad=quad)
         else:
             raise ValueError('Unknown grid {}'.format(method))
 
@@ -911,8 +912,38 @@ class GridGenerator:
         return n, x, w
 
     @staticmethod
-    def chebyshev_halfinterval(n):
-        """Modified Gauss-Chebyshev quadrature of the second kind for
+    def quadrature(n, quad='chebyshev'):
+        """Quadrature rule for calculating \int_{-1}^{1} f(x) dx = \sum_i w_i f(x_i).
+
+        Returns n, x, w.
+
+        Input:
+           n: number of quadrature points
+           quad: quadrature rule, either 'chebyshev' for Chebyshev or
+                'trapezoidal' for the trapezoidal rule
+
+        """
+        if quad == 'chebyshev':
+            n, xi, wi = GridGenerator.chebyshev(n)
+        elif quad == 'trapezoidal':
+            # Form trapezoidal rule. This agrees with the description
+            # in eqns (18)-(19) in P. M. W. Gill, S.-H. Chien, Radial
+            # Quadrature for Multiexponential Integrands,
+            # J. Comput. Chem. 24, 732 (2003). doi:10.1002/jcc.10211
+
+            # Starting with the rule in [0, 1]: x_i = i/(N+1), w_i =
+            # 1/(N+1) gives us
+            xi = np.asarray([1.0 - 2*j/(n+1) for j in range(1,n+1)])
+            wi = 2.0/(n+1.0)
+
+        else:
+            raise ValueError('Unknown quadrature rule\n')
+
+        return n, xi, wi
+
+    @staticmethod
+    def quadrature_halfinterval(n, quad):
+        """Quadrature rule of the second kind for
         calculating \int_{0}^{1} f(x) dx = \sum_i w_i f(x_i).
 
         Returns n, x, w.
@@ -923,30 +954,14 @@ class GridGenerator:
         doi:10.1063/1.467061
 
         """
-        n, xc, wc = GridGenerator.chebyshev(n)
+        n, xc, wc = GridGenerator.quadrature(n, quad)
         # Translate weights from [-1, 1] to [0, 1]
         xi = 0.5*(xc+1.0)
         wi = 0.5*wc
         return n, xi, wi
 
     @staticmethod
-    def trapezoid_halfinterval(n):
-        """Trapezoidal rule for \int_{0}^{1} f(x) dx = \sum_i w_i f(x_i).
-
-        Returns n, x, w.
-
-        No point is placed at the nucleus since the quadrature weight
-        vanishes there anyhow.
-        """
-        # Trapezoidal nodes
-        xi = np.asarray(range(1,n+1))/(n+1.0)
-        # Weights
-        wi = np.ones_like(xi)/(n+1.0)
-
-        return n, xi, wi
-
-    @staticmethod
-    def radial_ahlrichs(n, alpha=0.6):
+    def radial_ahlrichs(n, alpha=0.6, quad='chebyshev'):
         """Treutler-Ahlrichs M4 quadrature for calculating \int_{0}^{\infty}
         r^2 f(r) dr = \sum_i w_i r_i^2 f(r_i).
 
@@ -969,7 +984,7 @@ class GridGenerator:
 
         """
 
-        n, x, w = GridGenerator.chebyshev(n)
+        n, x, w = GridGenerator.quadrature(n, quad)
 
         if alpha == 0.0:
             r = 1.0/log(2.0)*np.log(2.0/(1.0-x))
@@ -1010,7 +1025,7 @@ class GridGenerator:
         return n, x, w
 
     @staticmethod
-    def radial_handy(n):
+    def radial_handy(n, quad='chebyshev'):
         """Handy grid for calculating \int_{0}^{\infty} x^2 f(x) dx = \sum_i w_i f(x_i).
 
         Described in C. W. Murray, N. C. Handy, and G. J. Laming,
@@ -1021,14 +1036,15 @@ class GridGenerator:
 
         See eqns (18)-(20) in P. M. W. Gill, S.-H. Chien, Radial
         Quadrature for Multiexponential Integrands,
-        J. Comput. Chem. 24, 732 (2003). doi:10.1002/jcc.10211
-        Note that this routine uses Chebyshev quadrature instead of
-        the trapezoidal quadrature of the above paper.
+        J. Comput. Chem. 24, 732 (2003). doi:10.1002/jcc.10211 Note
+        that this routine uses Chebyshev quadrature by default instead
+        of the trapezoidal quadrature of the above paper, depending on
+        the quad argument.
 
         """
 
         # Get the quadrature rule in [0, 1]
-        n, xi, wi = GridGenerator.chebyshev_halfinterval(n)
+        n, xi, wi = GridGenerator.quadrature_halfinterval(n, quad)
         # Integration nodes
         x = np.divide(np.power(xi, 2), np.power(1.0-xi,2))
         # Integration weights
@@ -1037,7 +1053,7 @@ class GridGenerator:
         return n, x, w
 
     @staticmethod
-    def radial_muraknowles(n, m=3):
+    def radial_muraknowles(n, m=3, quad='chebyshev'):
         """Mura-Knowles grid for calculating \int_{0}^{\infty} x^2 f(x) dx = \sum_i w_i f(x_i).
 
         Described in M. E. Mura, P. J. Knowles, Improved radial grids
@@ -1056,11 +1072,11 @@ class GridGenerator:
         However, that paper seems to be wrong in the quadrature rule;
         Molpro's manual states that Gauss quadrature is used in the x
         space instead of the trapezoidal rule, so this routine uses
-        Chebyshev quadrature.
+        Chebyshev quadrature as default.
         """
 
         # Get the quadrature rule in [0, 1]
-        n, xi, wi = GridGenerator.chebyshev_halfinterval(n)
+        n, xi, wi = GridGenerator.quadrature_halfinterval(n, quad)
         # Form the quadrature rule
         x = -np.log(1-xi**m)
         w = np.multiply(wi, np.divide(m*(xi**(m-1))*np.log(1-(xi**m))**2, (1.0-xi**m)))
