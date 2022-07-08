@@ -97,7 +97,8 @@ HelFEM.</p>
 initialised with the desired atomic element symbol:</p>
 
 ```python 
-import Densities neon = Densities.Atom("Ne")
+import AtomicOrbitals
+neon = AtomicOrbitals.Atom("Ne")
 ```
 
 <p>Calling the initialised atom's <code>get_densities(r)</code> method
@@ -174,7 +175,7 @@ href="https://www.jfurness.uk/Publications/Furness2019.pdf">β
 iso-orbital indicator</a>:</p>
 
 ```python
-from Densities import Atom
+from AtomicOrbitals import Atom
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -205,8 +206,8 @@ plt.show()
 to the pretabulated values when the test set is run:</p>
 
 ```python
-import Densities
-Densities.test_densities()
+import AtomicOrbitals
+AtomicOrbitals.test_densities()
 ```
 
 <p>If the Python interface of libxc is available, the test will also
@@ -216,7 +217,7 @@ approximation.</p>
 <p>Alternatively running the module as main runs the test:</p>
 
 ```bash
-python Densities.py
+python AtomicOrbitals.py
 ```
 
 <p>The module also implements methods to get the Jmol coloring (roughly CPK colors) of the elements. This can be accessed by calling an Atom object's <code>get_color()</code> method, or by passing a list of element label strings or Atom objects to the <code>get_colors_for_elements()</code> function.</p>
