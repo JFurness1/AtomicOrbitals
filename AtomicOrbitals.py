@@ -266,8 +266,8 @@ class Atom:
             lap_X   Laplacian of electron density
         """
         # Handle scalar r values as single element array
-        if not np.isscalar(r):
-            r = np.array((r))
+        if np.isscalar(r):
+            r = np.array([r])
 
         assert np.min(r) > 0, "Error: distances must be non-zero and positive."
 
