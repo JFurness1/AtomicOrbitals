@@ -1004,6 +1004,9 @@ class GridGenerator:
             n, xi, wi = GridGenerator.chebyshev2_modified(n)
         elif quad == 'chebyshev3':
             n, xi, wi = GridGenerator.chebyshev3(n)
+        elif quad == 'legendre':
+            import scipy
+            xi, wi = scipy.special.roots_legendre(n)
         elif quad == 'trapezoidal':
             # Form trapezoidal rule. This agrees with the description
             # in eqns (18)-(19) in P. M. W. Gill, S.-H. Chien, Radial
