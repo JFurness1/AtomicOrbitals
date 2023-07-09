@@ -834,7 +834,7 @@ class GridGenerator:
         np.sum(f(r)*4*pi*weight)
     """
     @staticmethod
-    def make_grid(n, method='ahlrichsm3', R=1.0, quad='chebyshev'):
+    def make_grid(n, method='ahlrichsm3', R=1.0, quad='chebyshev2_mod'):
         """
         Generate a radial integration grid containing n points.
             n: desired grid points
@@ -844,7 +844,7 @@ class GridGenerator:
                'handy'         : Murray-Handy-Laming quadrature
                'muraknowles'   : Mura-Knowles quadrature
             R: atomic size adjustment parameter, default R=1.0
-            quad: quadrature scheme, 'chebyshev' (default) or 'trapezoidal'
+            quad: quadrature scheme, 'chebyshev2_mod' (default)
         OUT:
             n: number of grid points (note: may be different from that requested)
             r: numpy array of coordinates
@@ -877,7 +877,55 @@ class GridGenerator:
         return n, r, wt
 
     @staticmethod
-    def chebyshev(n):
+    def chebyshev1(n):
+        """Gauss-Chebyshev quadrature of the first kind for
+        calculating \int_{-1}^{1} f(x) dx = \sum_i w_i f(x_i).
+
+        Returns n, x, w.
+
+        See Abramowitz-Stegun p. 889
+
+        """
+
+        # Index vector
+        ivec = np.asarray([ n+1-i for i in range(1,n+1)])
+        # Angles for sine and cosine
+        angles = (2*ivec-1)*pi/(2*n)
+
+        # Integration nodes
+        x = np.cos(angles)
+
+        # Integration weights
+        w = pi/n*np.sqrt(1-np.square(x))
+
+        return n, x, w
+
+    @staticmethod
+    def chebyshev2(n):
+        """Gauss-Chebyshev quadrature of the second kind for
+        calculating \int_{-1}^{1} f(x) dx = \sum_i w_i f(x_i).
+
+        Returns n, x, w.
+
+        See Abramowitz-Stegun p. 889
+
+        """
+
+        # Index vector
+        ivec = np.asarray([ n+1-i for i in range(1,n+1)])
+        # Angles for sine and cosine
+        angles = ivec*pi/(n+1)
+
+        # Integration nodes
+        x = np.cos(angles)
+
+        # Integration weights
+        w = pi/(n+1)*np.sqrt(1-np.square(x))
+
+        return n, x, w
+
+    @staticmethod
+    def chebyshev2_modified(n):
         """Modified Gauss-Chebyshev quadrature of the second kind for
         calculating \int_{-1}^{1} f(x) dx = \sum_i w_i f(x_i).
 
@@ -912,19 +960,50 @@ class GridGenerator:
         return n, x, w
 
     @staticmethod
-    def quadrature(n, quad='chebyshev'):
+    def chebyshev3(n):
+        """Gauss-Chebyshev quadrature of the third kind for
+        calculating \int_{-1}^{1} f(x) dx = \sum_i w_i f(x_i).
+
+        Returns n, x, w.
+
+        See Abramowitz-Stegun p. 889
+
+        """
+
+        # Index vector
+        ivec = np.asarray([ n+1-i for i in range(1,n+1)])
+        # Angles for sine and cosine
+        angles = 0.5*(2*ivec-1)*pi/(2*n+1)
+
+        # Original integration nodes and weights
+        x = np.square(np.cos(angles))
+        w = 2*pi/(2*n+1)*x*np.sqrt(np.divide(1-x,x))
+
+        # Transform from [0,1] to [-1,1]
+        x = 2*x-1
+        w = 2*w
+
+        return n, x, w
+
+    @staticmethod
+    def quadrature(n, quad='chebyshev2_mod'):
         """Quadrature rule for calculating \int_{-1}^{1} f(x) dx = \sum_i w_i f(x_i).
 
         Returns n, x, w.
 
         Input:
            n: number of quadrature points
-           quad: quadrature rule, either 'chebyshev' for Chebyshev or
-                'trapezoidal' for the trapezoidal rule
+           quad: quadrature rule
 
         """
-        if quad == 'chebyshev':
-            n, xi, wi = GridGenerator.chebyshev(n)
+        if quad == 'chebyshev1':
+            n, xi, wi = GridGenerator.chebyshev1(n)
+        elif quad == 'chebyshev2':
+            n, xi, wi = GridGenerator.chebyshev2(n)
+        elif quad == 'chebyshev2_mod':
+            n, xi, wi = GridGenerator.chebyshev2_modified(n)
+        elif quad == 'chebyshev3':
+            n, xi, wi = GridGenerator.chebyshev3(n)
         elif quad == 'trapezoidal':
             # Form trapezoidal rule. This agrees with the description
             # in eqns (18)-(19) in P. M. W. Gill, S.-H. Chien, Radial
@@ -961,7 +1040,7 @@ class GridGenerator:
         return n, xi, wi
 
     @staticmethod
-    def radial_ahlrichs(n, alpha=0.6, quad='chebyshev'):
+    def radial_ahlrichs(n, alpha=0.6, quad='chebyshev2_mod'):
         """Treutler-Ahlrichs M4 quadrature for calculating \int_{0}^{\infty}
         r^2 f(r) dr = \sum_i w_i r_i^2 f(r_i).
 
@@ -1025,7 +1104,7 @@ class GridGenerator:
         return n, x, w
 
     @staticmethod
-    def radial_handy(n, quad='chebyshev'):
+    def radial_handy(n, quad='chebyshev2_mod'):
         """Handy grid for calculating \int_{0}^{\infty} x^2 f(x) dx = \sum_i w_i f(x_i).
 
         Described in C. W. Murray, N. C. Handy, and G. J. Laming,
@@ -1053,7 +1132,7 @@ class GridGenerator:
         return n, x, w
 
     @staticmethod
-    def radial_muraknowles(n, m=3, quad='chebyshev'):
+    def radial_muraknowles(n, m=3, quad='chebyshev2_mod'):
         """Mura-Knowles grid for calculating \int_{0}^{\infty} x^2 f(x) dx = \sum_i w_i f(x_i).
 
         Described in M. E. Mura, P. J. Knowles, Improved radial grids
