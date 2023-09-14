@@ -862,6 +862,8 @@ class GridGenerator:
             n, r, wt = GridGenerator.radial_handy(n, quad=quad)
         elif method == 'muraknowles':
             n, r, wt = GridGenerator.radial_muraknowles(n, quad=quad)
+        elif method == 'becke':
+            n, r, wt = GridGenerator.radial_becke(n, quad=quad)
         else:
             raise ValueError('Unknown grid {}'.format(method))
 
@@ -1164,6 +1166,32 @@ class GridGenerator:
         w = np.multiply(wi, np.divide(m*(xi**(m-1))*np.log(1-(xi**m))**2, (1.0-xi**m)))
 
         return n, x, w
+
+    @staticmethod
+    def radial_becke(n, quad='chebyshev2'):
+        """Becke quadrature for calculating \int_{0}^{\infty}
+        r^2 f(r) dr = \sum_i w_i r_i^2 f(r_i).
+
+        Returns n, x, w.
+
+        See A. Becke, J. Chem. Phys. 88, 2547 (1988), eqn (25).
+
+        The radial transformation is given by
+
+        r = (1+x)/(1-x)
+
+        where x are quadrature weights for the [-1, 1] interval.
+        """
+
+        n, x, w = GridGenerator.quadrature(n, quad)
+
+        r = (1+x)/(1-x)
+        dr = 2/(x-1)**2
+
+        wr = w*dr*r**2
+
+        # Get radii in increasing order
+        return n, np.flip(r), np.flip(wr)
 
 """
 Defines the "color" of each element, same as those used by Jmol, roughly follows CPK coloring
