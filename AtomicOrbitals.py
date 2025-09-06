@@ -881,7 +881,9 @@ class GridGenerator:
     @staticmethod
     def chebyshev1(n):
         """Gauss-Chebyshev quadrature of the first kind for
-        calculating \int_{-1}^{1} f(x) dx = \sum_i w_i f(x_i).
+        calculating
+
+        .. math:: \int_{-1}^{1} f(x) dx = \sum_i w_i f(x_i).
 
         Returns n, x, w.
 
@@ -905,7 +907,9 @@ class GridGenerator:
     @staticmethod
     def chebyshev2(n):
         """Gauss-Chebyshev quadrature of the second kind for
-        calculating \int_{-1}^{1} f(x) dx = \sum_i w_i f(x_i).
+        calculating
+
+        .. math:: \int_{-1}^{1} f(x) dx = \sum_i w_i f(x_i).
 
         Returns n, x, w.
 
@@ -929,7 +933,9 @@ class GridGenerator:
     @staticmethod
     def chebyshev2_modified(n):
         """Modified Gauss-Chebyshev quadrature of the second kind for
-        calculating \int_{-1}^{1} f(x) dx = \sum_i w_i f(x_i).
+        calculating
+
+        .. math:: \int_{-1}^{1} f(x) dx = \sum_i w_i f(x_i).
 
         Returns n, x, w.
 
@@ -964,7 +970,9 @@ class GridGenerator:
     @staticmethod
     def chebyshev3(n):
         """Gauss-Chebyshev quadrature of the third kind for
-        calculating \int_{-1}^{1} f(x) dx = \sum_i w_i f(x_i).
+        calculating
+
+        .. math:: \int_{-1}^{1} f(x) dx = \sum_i w_i f(x_i).
 
         Returns n, x, w.
 
@@ -989,7 +997,9 @@ class GridGenerator:
 
     @staticmethod
     def quadrature(n, quad='chebyshev2_mod'):
-        """Quadrature rule for calculating \int_{-1}^{1} f(x) dx = \sum_i w_i f(x_i).
+        """Quadrature rule for calculating
+
+        .. math:: \int_{-1}^{1} f(x) dx = \sum_i w_i f(x_i).
 
         Returns n, x, w.
 
@@ -1028,7 +1038,9 @@ class GridGenerator:
     @staticmethod
     def quadrature_halfinterval(n, quad):
         """Quadrature rule of the second kind for
-        calculating \int_{0}^{1} f(x) dx = \sum_i w_i f(x_i).
+        calculating
+
+        .. math:: \int_{0}^{1} f(x) dx = \sum_i w_i f(x_i).
 
         Returns n, x, w.
 
@@ -1046,8 +1058,9 @@ class GridGenerator:
 
     @staticmethod
     def radial_ahlrichs(n, alpha=0.6, quad='chebyshev2_mod'):
-        """Treutler-Ahlrichs M4 quadrature for calculating \int_{0}^{\infty}
-        r^2 f(r) dr = \sum_i w_i r_i^2 f(r_i).
+        """Treutler-Ahlrichs M4 quadrature for calculating
+
+        .. math:: \int_{0}^{\infty} r^2 f(r) dr = \sum_i w_i r_i^2 f(r_i).
 
         Returns n, x, w.
 
@@ -1085,7 +1098,9 @@ class GridGenerator:
     @staticmethod
     def radial_laguerre(n):
         """Gauss-Laguerre quadrature of the second kind for
-        calculating \int_{0}^{\infty} x^2 f(x) dx = \sum_i w_i f(x_i).
+        calculating
+
+        .. math:: \int_{0}^{\infty} x^2 f(x) dx = \sum_i w_i f(x_i).
 
         Returns n, x, w.
 
@@ -1110,7 +1125,9 @@ class GridGenerator:
 
     @staticmethod
     def radial_handy(n, quad='chebyshev2_mod'):
-        """Handy grid for calculating \int_{0}^{\infty} x^2 f(x) dx = \sum_i w_i f(x_i).
+        """Handy grid for calculating
+
+        .. math:: \int_{0}^{\infty} x^2 f(x) dx = \sum_i w_i f(x_i).
 
         Described in C. W. Murray, N. C. Handy, and G. J. Laming,
         Quadrature schemes for integrals of density functional theory,
@@ -1138,7 +1155,9 @@ class GridGenerator:
 
     @staticmethod
     def radial_muraknowles(n, m=3, quad='chebyshev2_mod'):
-        """Mura-Knowles grid for calculating \int_{0}^{\infty} x^2 f(x) dx = \sum_i w_i f(x_i).
+        """Mura-Knowles grid for calculating
+
+        .. math:: \int_{0}^{\infty} x^2 f(x) dx = \sum_i w_i f(x_i).
 
         Described in M. E. Mura, P. J. Knowles, Improved radial grids
         for quadrature in molecular density-functional calculations,
@@ -1169,8 +1188,9 @@ class GridGenerator:
 
     @staticmethod
     def radial_becke(n, quad='chebyshev2'):
-        """Becke quadrature for calculating \int_{0}^{\infty}
-        r^2 f(r) dr = \sum_i w_i r_i^2 f(r_i).
+        """Becke quadrature for calculating
+
+        .. math:: \int_{0}^{\infty} r^2 f(r) dr = \sum_i w_i r_i^2 f(r_i).
 
         Returns n, x, w.
 
